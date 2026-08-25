@@ -85,6 +85,12 @@ The workspace is divided into four focused crates:
 
 The next backend milestones are provider adapters and streaming, task-graph persistence and leases, PTY/process supervision, Git and file tools, scheduler execution, skill loading, MCP, and the loopback Axum API for the browser control plane.
 
+## Startup banner
+
+Every `utharness init` and `utharness tui` startup begins with a compact branded banner before the setup or terminal workspace begins. Wide terminals render the requested Unicode wordmark; medium terminals use an ASCII-safe fallback; terminals below 42 columns switch to a compact three-line layout. The banner centers itself from the detected `COLUMNS` value or terminal size and includes the current package version.
+
+The banner uses ANSI theme colors when attached to a terminal. Set `UTHARNESS_THEME=midnight-cyan`, `UTHARNESS_THEME=ember`, or `UTHARNESS_THEME=mono-black` to select a built-in palette. Set `UTHARNESS_ASCII=1` or `NO_COLOR=1` to force ASCII/no-color output. Set `UTHARNESS_REDUCED_MOTION=1` to disable the type-in animation; non-interactive output disables animation automatically.
+
 ## Development
 
 ```bash

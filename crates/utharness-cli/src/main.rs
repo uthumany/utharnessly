@@ -25,6 +25,8 @@ use utharness_core::{MessageRole, PermissionMode};
 use utharness_security::Policy;
 use utharness_storage::Storage;
 
+mod banner;
+
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Parser, Debug)]
@@ -183,6 +185,7 @@ fn main() -> Result<()> {
     match cli.command {
         None => launch_tui(false),
         Some(CommandKind::Init(args)) => {
+            banner::print_startup_banner(VERSION)?;
             let app = App::open(&args.workspace)?;
             println!("UTHARNESS initialized");
             println!("workspace: {}", app.workspace.canonical_path);
@@ -393,6 +396,7 @@ fn config_show() -> Result<()> {
 }
 
 fn launch_tui(headless: bool) -> Result<()> {
+    banner::print_startup_banner(VERSION)?;
     if headless || !io::stdin().is_terminal() || !io::stdout().is_terminal() {
         println!("UTHARNESS · AGENT TERMINAL");
         println!(
