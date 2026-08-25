@@ -4,6 +4,7 @@
 
 ### Added
 
+- Instant startup banner with large UTHY block lettering, ANSI themes, Unicode/ASCII fallback, compact narrow-terminal mode, version display, and opt-in type-in animation.
 - Native Rust workspace with core, storage, security, and CLI crates.
 - SQLite WAL persistence with embedded initial migration and FTS5 memory search.
 - Persisted workspaces, sessions, messages, tasks, checkpoints, runtime events, tool calls, permission decisions, and audit records.

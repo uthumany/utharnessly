@@ -23,6 +23,16 @@ fn cli_persists_workspace_session_memory_and_doctor() {
     let home = tempdir().unwrap();
     let bin = env!("CARGO_BIN_EXE_utharness");
 
+    let startup = run(bin, workspace.path(), home.path(), &[]);
+    assert!(
+        startup.contains("U T H Y"),
+        "startup stdout was: {startup:?}"
+    );
+    assert!(
+        startup.contains("AGENT TERMINAL"),
+        "startup stdout was: {startup:?}"
+    );
+
     let init = run(bin, workspace.path(), home.path(), &["init"]);
     assert!(init.contains("UTHARNESS initialized"));
 

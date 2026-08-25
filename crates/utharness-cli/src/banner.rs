@@ -7,22 +7,23 @@ use std::io::{self, IsTerminal, Write};
 use std::thread;
 use std::time::Duration;
 
+/// Large Unicode-safe UTHY block lettering for terminals with enough width.
 pub const UNICODE_BANNER: [&str; 6] = [
-    "██╗   ██╗████████╗██╗  ██╗",
-    "██║   ██║╚══██╔══╝██║  ██║",
-    "██║   ██║   ██║   ███████║",
-    "██║   ██║   ██║   ██╔══██║",
-    "╚██████╔╝   ██║   ██║  ██║",
-    " ╚═════╝    ╚═╝   ╚═╝  ╚═╝",
+    "██╗   ██╗████████╗██╗  ██╗╚██╗ ██╔╝",
+    "██║   ██║╚══██╔══╝██║  ██║ ╚████╔╝ ",
+    "██║   ██║   ██║   ███████║  ╚██╔╝  ",
+    "██║   ██║   ██║   ██╔══██║   ██║   ",
+    "╚██████╔╝   ██║   ██║  ██║   ██║   ",
+    " ╚═════╝    ╚═╝   ╚═╝  ╚═╝   ╚═╝   ",
 ];
 
-pub const ASCII_BANNER: [&str; 6] = [
-    "UU   UU TTTTTTT HH  HH  AAA  RRRRR  NN  NN EEEEE SS",
-    "UU   UU   TTT   HH  HH AAAAA RRRRR  NNN NN EE    SS",
-    "UU   UU   TTT   HHHHHH AA AA RR RR  NNNNNN EEEE  SSS",
-    "UU   UU   TTT   HH  HH AAAAA RRRR   NN NNN EE     SS",
-    "UUUUUUU   TTT   HH  HH AA AA RR RR  NN  NN EEEEE SSSS",
-    "                                                       ",
+/// Smaller ASCII-only UTHY lettering for medium or forced-ASCII terminals.
+pub const ASCII_BANNER: [&str; 5] = [
+    "UU   UU TTTTTTT HH  HH YY  YY",
+    "UU   UU   TTT   HH  HH  YY YY ",
+    "UU   UU   TTT   HHHHHH   YYY  ",
+    "UU   UU   TTT   HH  HH    YY  ",
+    " UUUUUU   TTT   HH  HH    YY  ",
 ];
 
 #[derive(Clone, Copy, Debug)]
@@ -112,26 +113,45 @@ pub fn reduced_motion() -> bool {
         || std::env::var_os("REDUCED_MOTION").is_some()
 }
 
+/// Animation is opt-in so `utharness` paints its identity immediately. Set
+/// `UTHARNESS_BANNER_ANIMATION=typein` for the restrained type-in effect.
+pub fn animation_enabled() -> bool {
+    !reduced_motion()
+        && matches!(
+            std::env::var("UTHARNESS_BANNER_ANIMATION")
+                .unwrap_or_default()
+                .to_ascii_lowercase()
+                .as_str(),
+            "typein" | "type-in"
+        )
+}
+
 pub fn render_banner(width: u16, version: &str, ansi: bool) -> String {
     let mode = mode_for_width(width);
     let theme = BannerTheme::from_environment();
     let mut lines = Vec::new();
     match mode {
         BannerMode::Compact => {
-            lines.push("UTHARNESS".to_string());
+            lines.push("UTHY".to_string());
             lines.push("AGENT TERMINAL".to_string());
             lines.push(format!("v{version}"));
         }
         BannerMode::Unicode | BannerMode::Ascii => {
-            let art = if mode == BannerMode::Unicode {
-                &UNICODE_BANNER
+            let art: Vec<String> = if mode == BannerMode::Unicode {
+                UNICODE_BANNER
+                    .iter()
+                    .map(|line| (*line).to_string())
+                    .collect()
             } else {
-                &ASCII_BANNER
+                ASCII_BANNER
+                    .iter()
+                    .map(|line| (*line).to_string())
+                    .collect()
             };
-            lines.extend(art.iter().map(|line| (*line).to_string()));
-            lines.push("      U T H A R N E S S".to_string());
-            lines.push("        AGENT TERMINAL".to_string());
-            lines.push(format!("             v{version}"));
+            lines.extend(art);
+            lines.push("              U T H Y".to_string());
+            lines.push("            AGENT TERMINAL".to_string());
+            lines.push(format!("                 v{version}"));
         }
     }
     let max_width = lines
@@ -172,20 +192,13 @@ fn ansi_code(color: Color) -> String {
     match color {
         Color::Black => "\x1b[30m".into(),
         Color::DarkGrey => "\x1b[90m".into(),
-        Color::Red => "\x1b[31m".into(),
-        Color::DarkRed => "\x1b[31m".into(),
-        Color::Green => "\x1b[32m".into(),
-        Color::DarkGreen => "\x1b[32m".into(),
-        Color::Yellow => "\x1b[33m".into(),
-        Color::DarkYellow => "\x1b[33m".into(),
-        Color::Blue => "\x1b[34m".into(),
-        Color::DarkBlue => "\x1b[34m".into(),
-        Color::Magenta => "\x1b[35m".into(),
-        Color::DarkMagenta => "\x1b[35m".into(),
-        Color::Cyan => "\x1b[36m".into(),
-        Color::DarkCyan => "\x1b[36m".into(),
-        Color::White => "\x1b[37m".into(),
-        Color::Grey => "\x1b[37m".into(),
+        Color::Red | Color::DarkRed => "\x1b[31m".into(),
+        Color::Green | Color::DarkGreen => "\x1b[32m".into(),
+        Color::Yellow | Color::DarkYellow => "\x1b[33m".into(),
+        Color::Blue | Color::DarkBlue => "\x1b[34m".into(),
+        Color::Magenta | Color::DarkMagenta => "\x1b[35m".into(),
+        Color::Cyan | Color::DarkCyan => "\x1b[36m".into(),
+        Color::White | Color::Grey => "\x1b[37m".into(),
         Color::Rgb { r, g, b } => format!("\x1b[38;2;{r};{g};{b}m"),
         _ => "\x1b[39m".into(),
     }
@@ -199,9 +212,8 @@ pub fn print_startup_banner(version: &str) -> anyhow::Result<()> {
     let width = terminal_width();
     let ansi = io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none();
     let rendered = render_banner(width, version, ansi);
-    let animate = ansi && !reduced_motion() && width >= 42;
     let mut stdout = io::stdout();
-    if animate {
+    if ansi && animation_enabled() && width >= 42 {
         for line in rendered.lines() {
             for ch in line.chars() {
                 write!(stdout, "{ch}")?;
@@ -225,10 +237,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn renders_requested_unicode_art_on_wide_terminal() {
+    fn renders_uthy_unicode_art_on_wide_terminal() {
         let output = render_banner(120, "0.1.0", false);
         assert!(output.contains(UNICODE_BANNER[0]));
-        assert!(output.contains("U T H A R N E S S"));
+        assert!(output.contains("U T H Y"));
         assert!(output.contains("AGENT TERMINAL"));
         assert!(output.contains("v0.1.0"));
     }
@@ -243,8 +255,15 @@ mod tests {
     #[test]
     fn uses_compact_mode_for_narrow_terminal() {
         let output = render_banner(40, "0.1.0", false);
-        assert!(output.contains("UTHARNESS"));
+        assert!(output.contains("UTHY"));
         assert!(output.contains("AGENT TERMINAL"));
         assert!(!output.contains(UNICODE_BANNER[0]));
+    }
+
+    #[test]
+    fn ansi_output_contains_color_sequences() {
+        let output = render_banner(120, "0.1.0", true);
+        assert!(output.contains("\u{1b}["));
+        assert!(output.contains("\u{1b}[0m"));
     }
 }

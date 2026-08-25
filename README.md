@@ -87,9 +87,9 @@ The next backend milestones are provider adapters and streaming, task-graph pers
 
 ## Startup banner
 
-Every `utharness init` and `utharness tui` startup begins with a compact branded banner before the setup or terminal workspace begins. Wide terminals render the requested Unicode wordmark; medium terminals use an ASCII-safe fallback; terminals below 42 columns switch to a compact three-line layout. The banner centers itself from the detected `COLUMNS` value or terminal size and includes the current package version.
+Every `utharness` startup begins with the large **UTHY** block-letter banner before the setup or terminal workspace begins. `utharness init` and `utharness tui` use the same startup path. Wide terminals render the Unicode-safe UTHY wordmark; medium terminals use a smaller ASCII-safe UTHY fallback; terminals below 42 columns switch to a compact three-line layout. The banner centers itself from the detected `COLUMNS` value or terminal size and includes the current package version.
 
-The banner uses ANSI theme colors when attached to a terminal. Set `UTHARNESS_THEME=midnight-cyan`, `UTHARNESS_THEME=ember`, or `UTHARNESS_THEME=mono-black` to select a built-in palette. Set `UTHARNESS_ASCII=1` or `NO_COLOR=1` to force ASCII/no-color output. Set `UTHARNESS_REDUCED_MOTION=1` to disable the type-in animation; non-interactive output disables animation automatically.
+The banner paints immediately by default so the CLI identity appears without startup delay. Set `UTHARNESS_BANNER_ANIMATION=typein` to opt into the restrained type-in effect. ANSI theme colors are used when attached to a terminal. Set `UTHARNESS_THEME=midnight-cyan`, `UTHARNESS_THEME=ember`, or `UTHARNESS_THEME=mono-black` to select a built-in palette. Set `UTHARNESS_ASCII=1` or `NO_COLOR=1` to force ASCII/no-color output. Set `UTHARNESS_REDUCED_MOTION=1` or `REDUCED_MOTION=1` to disable animation.
 
 ## Development
 
