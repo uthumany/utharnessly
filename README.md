@@ -85,6 +85,12 @@ The workspace is divided into four focused crates:
 
 The next backend milestones are provider adapters and streaming, task-graph persistence and leases, PTY/process supervision, Git and file tools, scheduler execution, skill loading, MCP, and the loopback Axum API for the browser control plane.
 
+## TUI workspace
+
+The native TUI now uses the full available viewport instead of leaving the right side empty. Wide terminals use a `16% / 60% / 24%` navigation, chat, and inspector split. Medium terminals promote chat and inspector to a `66% / 34%` layout, while tiny terminals collapse to a single chat surface. The inspector combines Task, Context, Agents, Tools, and Git tabs, and the composer has its own dedicated bordered region.
+
+The keyboard model keeps focus visible. `Tab` moves between navigation, chat, and inspector; `Ctrl+B` collapses navigation; `Ctrl+1` through `Ctrl+5` jump inspector tabs; `h` and `l` switch inspector tabs when the inspector is focused; `Enter` sends the draft; `Esc` clears it; and `q` or `Ctrl+C` exits. The footer changes its hints with the active focus region.
+
 ## Startup banner
 
 Every `utharness` startup begins with the large **UTHY** block-letter banner before the setup or terminal workspace begins. `utharness init` and `utharness tui` use the same startup path. Wide terminals render the Unicode-safe UTHY wordmark; medium terminals use a smaller ASCII-safe UTHY fallback; terminals below 42 columns switch to a compact three-line layout. The banner centers itself from the detected `COLUMNS` value or terminal size and includes the current package version.

@@ -4,6 +4,7 @@
 
 ### Added
 
+- Full-viewport Ratatui workspace with dominant chat, responsive navigation, tabbed inspector, live task timeline, tool cards, dedicated composer, contextual keyboard hints, and tiny-terminal fallback.
 - Instant startup banner with large UTHY block lettering, ANSI themes, Unicode/ASCII fallback, compact narrow-terminal mode, version display, and opt-in type-in animation.
 - Native Rust workspace with core, storage, security, and CLI crates.
 - SQLite WAL persistence with embedded initial migration and FTS5 memory search.
