@@ -1,0 +1,25 @@
+[package]
+name = "utharness-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "utharness"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+crossterm.workspace = true
+ratatui.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+utharness-core = { path = "../utharness-core" }
+utharness-security = { path = "../utharness-security" }
+utharness-storage = { path = "../utharness-storage" }
+
+[dev-dependencies]
+tempfile.workspace = true
