@@ -1,135 +1,170 @@
-# Utharness Agent Terminal — Native Runtime
+# UTHARNESS
 
-Utharness is a local-first autonomous AI agent terminal. This repository is the native Rust runtime foundation for the product: a persistent SQLite-backed workspace, a safe tool boundary, a scriptable CLI, and a Ratatui terminal shell. It is a standalone product and is not UTHARNESS OS.
+[![CI](https://github.com/uthumany/utharnessly/actions/workflows/ci.yml/badge.svg)](https://github.com/uthumany/utharnessly/actions/workflows/ci.yml)
+[![Security](https://github.com/uthumany/utharnessly/actions/workflows/security.yml/badge.svg)](https://github.com/uthumany/utharnessly/actions/workflows/security.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-> **Current milestone:** a working offline-first backend that can initialize a workspace, persist sessions and messages, search memory with SQLite FTS5, create checkpoints, run explicitly approved shell commands, expose diagnostics, and open a persistent terminal UI.
+```text
+██╗   ██╗████████╗██╗  ██╗
+██║   ██║╚══██╔══╝██║  ██║
+██║   ██║   ██║   ███████║
+██║   ██║   ██║   ██╔══██║
+╚██████╔╝   ██║   ██║  ██║
+ ╚═════╝    ╚═╝   ╚═╝  ╚═╝
+
+      U T H A R N E S S
+        AGENT TERMINAL
+```
+
+**Utharness** is a local-first autonomous AI agent terminal. It combines a native Rust runtime, SQLite persistence, a conservative SAFE execution boundary, a scriptable CLI, and a reference-matched React/Ink terminal interface. The project is designed to be inspectable, reproducible, and useful both offline and with an explicitly configured provider.
+
+> **Current status:** the repository is public and ships the working offline-first runtime, native CLI, bounded autonomous inspection path, persistent SQLite journal, and bundled TypeScript/Ink TUI. Provider streaming, broader autonomous tool execution, and native packages for every operating system remain subsequent milestones.
 
 ## Quick start
 
 ```bash
+git clone https://github.com/uthumany/utharnessly.git
+cd utharnessly
+
+# Build the native runtime and the TypeScript/Ink terminal UI
 cargo build --release
-cargo test --workspace
-
-# Initialize the current repository
-./target/release/utharness init
-
-# Create a persisted session and send an offline planning request
-./target/release/utharness sessions new "Repository review"
-./target/release/utharness chat "Inspect this repository and propose a safe plan"
-
-# Persist and search project memory
-./target/release/utharness memory add "Shell writes require approval in ASK mode"
-./target/release/utharness memory search "approval"
-
-# Run diagnostics and inspect configuration
-./target/release/utharness doctor
-./target/release/utharness config show
-
-# Build and open the full-screen TypeScript/Ink TUI from an interactive terminal
-pnpm --dir ui install
+pnpm --dir ui install --frozen-lockfile
 pnpm --dir ui build
-./target/release/utharness tui
 
-# Run a bounded OpenRouter-backed read-only autonomous inspection
-export OPENROUTER_API_KEY="..."
-export UTHARNESS_MODEL="openrouter/free"
-./target/release/utharness autonomous "Inspect this workspace and report its Git status" --max-steps 3
+# Initialize the current workspace and inspect it
+./target/release/utharness init
+./target/release/utharness doctor
+
+# Open the persistent terminal UI
+./target/release/utharness tui
 ```
 
-The default storage location is `~/.local/share/utharness/utharness.db`. Set `UTHARNESS_HOME` or `UTHARNESS_DB` to use an isolated location for tests, CI, or portable deployments.
+The native binary remains named `utharness` for CLI compatibility. The repository and distribution identity is **utharnessly**. The default database is `~/.local/share/utharness/utharness.db`; use `UTHARNESS_HOME` or `UTHARNESS_DB` for isolated environments.
 
-## Working capabilities
+## Screenshots
+
+The following captures were generated from real isolated CLI and PTY runs. They are included as documentation assets rather than mockups.
+
+![UTHARNESS memory workflow](docs/assets/screenshots/memory-workflow.png)
+
+| Setup and runtime | Interactive UI |
+| --- | --- |
+| ![UTHARNESS setup output](docs/assets/screenshots/setup.png) | ![UTHARNESS wide terminal UI](docs/assets/screenshots/focus-120x36.png) |
+| ![UTHARNESS chat output](docs/assets/screenshots/chat.png) | ![UTHARNESS command palette](docs/assets/screenshots/command-palette.png) |
+| ![UTHARNESS configuration](docs/assets/screenshots/configuration.png) | ![UTHARNESS narrow terminal UI](docs/assets/screenshots/focus-80x24.png) |
+| ![UTHARNESS diagnostics](docs/assets/screenshots/doctor.png) | ![UTHARNESS compact terminal UI](docs/assets/screenshots/focus-40x18.png) |
+
+The interactive capture set covers `40`, `60`, `80`, `120`, `160`, and `220` columns, including short-height layouts. The UI keeps its header, UTHARNESS banner, prompt, and status bar fixed while the conversation viewport changes with terminal size.
+
+## Capabilities
 
 | Capability | Implementation |
 | --- | --- |
 | Native CLI | Clap commands for `init`, `chat`, `run`, `tui`, `autonomous`, `doctor`, `config`, `sessions`, `memory`, `checkpoint`, `skills`, `providers`, `agents`, and `tools`. |
-| SQLite persistence | Bundled SQLite with foreign keys, WAL mode, migration SQL, sessions, messages, tasks, checkpoints, events, memories, FTS5, tool calls, permissions, and audit tables. |
-| Offline chat | Deterministic offline planner response that persists both user and assistant messages without credentials. |
-| OpenRouter autonomy | OpenAI-compatible OpenRouter client that asks for a JSON plan, caps steps, executes only SAFE read-only tools, redacts output, and persists agent events. |
-| Memory | Workspace-scoped records and FTS5 search with triggers keeping the index synchronized. |
-| Safety | SAFE default, explicit `--allow` for shell execution, workspace-scoped execution, destructive-command denylist, and secret redaction. |
-| TUI | Ratatui/Crossterm alternate-screen interface with navigation, chat, task inspector, context meter, and keyboard exit handling. |
+| SQLite persistence | Bundled SQLite with foreign keys, WAL mode, migrations, sessions, messages, tasks, checkpoints, events, memories, FTS5 search, tool calls, permission decisions, and audit records. |
+| Offline operation | Deterministic offline planner responses persist user and assistant messages without credentials. |
+| Bounded autonomy | OpenRouter-compatible JSON planning with a strict SAFE read-only allowlist, step limits, workspace scoping, redaction, and persisted events. |
+| Safety | SAFE default, explicit approval for shell execution, destructive-command denial, workspace path validation, and secret redaction. |
+| Ink terminal UI | Full-screen React/Ink application with fixed branding, left-aligned message rows, tool cards, streaming presentation, command palette, prompt suggestions, scrolling, resize handling, spinners, and limited-color fallbacks. |
 | Diagnostics | Database integrity, workspace, storage, shell, provider, permissions, skills, and clean-runtime checks. |
-| Tests | Unit tests for domain and security rules, SQLite persistence tests, and a process-level CLI end-to-end test. |
+| Cross-platform source | Rust and Node 22 source builds for Linux, macOS, Windows, WSL, SSH, tmux, FreeBSD, and compatible Unix-like environments. |
 
-## CLI commands
+## Native CLI commands
 
 ```text
-utharness                         Open the TUI when attached to a terminal
-utharness init [--workspace PATH] Initialize a local workspace
-utharness chat PROMPT             Persist a prompt and offline planner response
-utharness run --command CMD       Refuse shell execution unless --allow is supplied
-utharness tui [--headless]        Open TUI or print a non-interactive status
-utharness autonomous PROMPT        Plan and execute bounded SAFE read-only tools through OpenRouter
-utharness doctor                  Run actionable local diagnostics
-utharness config show             Print effective local configuration
-utharness sessions list           List persisted sessions
-utharness sessions new TITLE      Create a session
-utharness memory add CONTENT      Store workspace memory
-utharness memory search QUERY     Search indexed memory
-utharness checkpoint              Create a session checkpoint
-utharness skills                  List built-in skills
-utharness providers               List provider routes
-utharness agents                  List agent roles
-utharness tools                   List registered tools and policy modes
+utharness                          Open the Ink TUI when attached to a terminal
+utharness init [--workspace PATH]  Initialize a local workspace
+utharness chat PROMPT              Persist a prompt and offline planner response
+utharness run --command CMD        Refuse shell execution unless explicitly allowed
+utharness tui [--headless]         Open the UI or print non-interactive status
+utharness autonomous PROMPT        Run bounded SAFE inspection through OpenRouter
+utharness doctor                   Run actionable diagnostics
+utharness config show              Print effective local configuration
+utharness sessions list            List persisted sessions
+utharness sessions new TITLE       Create a session
+utharness memory add CONTENT       Store workspace memory
+utharness memory search QUERY      Search indexed memory
+utharness checkpoint               Create a session checkpoint
+utharness skills                   List built-in skills
+utharness providers                List provider routes
+utharness agents                   List agent roles
+utharness tools                    List registered tools and policy modes
 ```
 
 Shell execution is intentionally opt-in:
 
 ```bash
-utharness run --command "cargo test"          # denied in SAFE mode
-utharness run --command "cargo test" --allow   # explicit approval required
+utharness run --command "cargo test"           # denied in SAFE mode
+utharness run --command "cargo test" --allow    # explicit approval path
 ```
+
+## Reference-matched terminal UI
+
+The interactive UI under [`ui/`](./ui) is a replacement for the former Rust TUI, not an additional disconnected mock. The Rust launcher starts `ui/dist/index.js` through Node 22 and falls back to `pnpm --dir ui dev` when a source checkout has not built the bundle. Set `UTHARNESS_UI_ENTRY` to use a custom bundle and `UTHARNESS_RUNTIME_BIN` to override the runtime executable used by the UI adapter.
+
+The design follows one shared left-aligned grid. The header and ASCII banner remain fixed on every display, including compact and short-height terminals. The conversation viewport contains UTHY/YOU rows, timestamps, streaming token updates, running and completed tool cards, success/error/approval states, and result summaries. The cyan prompt supports slash suggestions, `@file`, `@folder`, `@url`, `@agent`, `@skill`, and `@memory` references, plus command history.
+
+The terminal breakpoints are `40–59` compact, `60–79` narrow, `80–119` standard, `120–199` wide, and `200+` ultra-wide. The palette selects TrueColor, ANSI 256, ANSI 16, or monochrome behavior from `COLORTERM`, `TERM`, `UTHARNESS_COLOR`, `UTHARNESS_ASCII`, and `NO_COLOR`. `SIGWINCH` redraws the UI on resize, PageUp/PageDown scroll the conversation, mouse-wheel escape sequences adjust the viewport, and `UTHARNESS_REDUCED_MOTION=1` reduces animation.
+
+## Installation
+
+The complete installation matrix, including update, uninstall, clean reinstall, PATH, dependency, troubleshooting, operating-system, and terminal-environment guidance is in [`docs/installation.md`](./docs/installation.md). It deliberately distinguishes valid source or release workflows from channels that do not yet publish an utharnessly package.
+
+### Release archive installer
+
+For a published POSIX release archive:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/uthumany/utharnessly/main/packaging/install.sh | bash
+utharness
+```
+
+For Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/uthumany/utharnessly/main/packaging/install.ps1 | iex
+utharness
+```
+
+When a matching release archive is unavailable, these installers stop and print the Git source-build path instead of installing an unverified artifact.
 
 ## Architecture
 
-The workspace is divided into four focused crates:
-
-| Crate | Responsibility |
+| Component | Responsibility |
 | --- | --- |
-| `utharness-core` | Shared IDs, domain records, state machines, permission types, provider metadata, and diagnostic models. |
-| `utharness-storage` | SQLite connection policy, embedded migrations, repositories, FTS5 search, and persistence tests. |
-| `utharness-security` | Permission modes, workspace path validation, shell policy, and secret redaction. |
-| `utharness-cli` | Clap commands, offline agent behavior, bounded autonomous execution, tool execution, diagnostics, and the Rust-to-Ink launcher bridge. |
-| `utharness-provider` | OpenRouter/OpenAI-compatible HTTP client with typed JSON plan responses and timeout/error handling. |
-
-The next backend milestones are provider adapters and streaming, task-graph persistence and leases, PTY/process supervision, Git and file tools, scheduler execution, skill loading, MCP, and the loopback Axum API for the browser control plane.
-
-## Reference-matched TypeScript terminal UI
-
-The interactive terminal has been rebuilt rather than incrementally patched. The Rust command now launches `ui/dist/index.js` through Node 22, with a `pnpm --dir ui dev` fallback for source checkouts that have not built the bundle. The UI is a full-screen persistent React/Ink application using `@inkjs/ui`, `chalk`, `gradient-string`, `cli-spinners`, `figures`, `string-width`, `wrap-ansi`, `execa`, `chokidar`, and `zod`.
-
-Every display uses one left-aligned content grid. The header, ASCII branding, tips, workspace warning, prompt, and status bar are fixed; only the conversation viewport is height-constrained and scrollable. The header presents `UTHARNESS AGENT — focus mode` and `Ctrl+K`/help affordances. The persistent banner uses wide, medium, and compact ASCII variants, retains the word `UTHARNESS` on every display, and applies the requested amber-to-orange-to-coral gradient in truecolor terminals. The prompt is a cyan rounded border with `Type your message or @path/to/file`, slash command suggestions, `@file`, `@folder`, `@url`, `@agent`, `@skill`, and `@memory` context suggestions, and command history navigation.
-
-The conversation is composed of UTHY and YOU rows with timestamps, streaming token updates, running/completed tool cards, success/error/approval states, result summaries, and responsive wrapping. `Ctrl+K` opens the command palette; `PageUp`/`PageDown` scroll the conversation; arrow keys recall command history; mouse-wheel escape sequences adjust the viewport; and SIGWINCH triggers a redraw on resize. Runtime metadata is loaded through the native CLI boundary and filesystem/Git state is watched with Chokidar. If the native binary is available, prompt submissions invoke its persisted offline chat path through `execa`; otherwise the UI uses a bounded offline planner response.
-
-The fixed terminal breakpoints are `40–59` compact, `60–79` narrow, `80–119` standard, `120–199` wide, and `200+` ultra-wide. The compact layout preserves the explicit UTHARNESS identity, reduced prompt copy, and abbreviated status. TrueColor, ANSI 256, ANSI 16, and monochrome/no-color environments are selected from `COLORTERM`, `TERM`, `UTHARNESS_COLOR`, `UTHARNESS_ASCII`, and `NO_COLOR`. The implementation relies on standard ANSI input and SIGWINCH behavior and is designed for Linux, macOS, Windows Terminal, WSL, SSH, and tmux; each host’s terminal emulator still controls the final glyph metrics.
-
-## UI development and screenshots
-
-```bash
-cd ui
-pnpm install
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm screenshots
-```
-
-The PTY matrix exercises `40x18`, `60x20`, `80x24`, `120x36`, `160x40`, and `220x44`, plus a command-palette capture. Generated PNGs are kept under `ui/screenshots/` during development and are not required at runtime. The Rust bridge can be verified with `cargo build --release` followed by `./target/release/utharness tui` from an interactive terminal. Set `UTHARNESS_UI_ENTRY` to point the Rust launcher at a custom compiled UI bundle.
-
-The UI is distributed as a normal Node package and supports the common command runners: `npm install && npm run build`, `npx tsx ui/src/index.tsx`, `pnpm --dir ui install && pnpm --dir ui build`, `yarn --cwd ui install && yarn --cwd ui build`, and `bun --cwd ui install && bun --cwd ui run build`. Deno can execute the source entrypoint with its Node-compatibility mode when dependencies are available; `uv` and `pipx` remain supported for surrounding Python-based PTY/automation workflows. Git users can clone the private repository, build the Rust binary, build `ui/dist/index.js`, and run `utharness tui` from a workspace.
+| `utharness-core` | Domain IDs, records, state machines, permission types, provider metadata, and diagnostic models. |
+| `utharness-storage` | SQLite policy, embedded migrations, repositories, FTS5 memory search, and persistence tests. |
+| `utharness-security` | Permission modes, workspace validation, shell policy, and secret redaction. |
+| `utharness-cli` | Clap commands, offline behavior, bounded autonomous execution, tool execution, diagnostics, and the Rust-to-Ink launcher bridge. |
+| `utharness-provider` | OpenRouter/OpenAI-compatible HTTP client with typed JSON responses and timeout/error handling. |
+| `ui/` | React/Ink terminal UI, runtime metadata adapter, package scripts, tests, and PTY screenshot harness. |
 
 ## Development
 
 ```bash
+# Native runtime
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace
 cargo build --release
+
+# TypeScript/Ink UI
+pnpm --dir ui install --frozen-lockfile
+pnpm --dir ui typecheck
+pnpm --dir ui test
+pnpm --dir ui build
+pnpm --dir ui screenshots
 ```
 
-The repository intentionally has no committed credentials. Provider secrets should be supplied through the OS keyring or environment variables and must never be persisted in logs, checkpoints, or prompts. The autonomous command is deliberately bounded: it accepts a model-generated JSON plan but executes only the SAFE allowlist (`list_directory`, `read_file`, `git_status`, and `git_diff`), limits the number of steps, scopes paths to the workspace, and records redacted results.
+The public CI matrix runs Rust formatting, Clippy, tests, release compilation, and UI typechecking/build checks on supported hosted operating systems. Security automation runs dependency auditing and repository secret-pattern checks. Release automation packages the native binary together with the UI bundle and publishes SHA-256 checksums.
+
+## Security and credentials
+
+Provider credentials are never committed or persisted by the runtime. Supply provider secrets through environment variables or an external secret manager. The autonomous command accepts a model-generated plan but executes only SAFE read-only tools such as directory listing, file reads, Git status, and Git diff; it limits steps, scopes paths to the workspace, redacts output, and records events.
+
+## Contributing
+
+Read [`CONTRIBUTING.md`](./CONTRIBUTING.md), run the complete native and UI validation commands, and keep package-manager lockfiles in sync. Do not add a package-manager integration merely to claim compatibility: every installation channel must have a reproducible implementation and a documented dependency check.
 
 ## License
 

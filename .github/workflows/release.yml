@@ -8,22 +8,84 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: Build release artifact
-    runs-on: ubuntu-latest
+  build:
+    name: Build ${{ matrix.platform }} artifact
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            archive: tar.gz
+          - os: macos-latest
+            platform: macos
+            archive: tar.gz
+          - os: windows-latest
+            platform: windows
+            archive: zip
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+      - run: pnpm --dir ui install --frozen-lockfile
+      - run: pnpm --dir ui build
       - run: cargo build --release
-      - name: Package
+      - name: Package POSIX artifact
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          mkdir -p dist
-          cp target/release/utharness dist/utharness-linux-x64
-          sha256sum dist/utharness-linux-x64 > dist/SHA256SUMS
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          root="utharnessly-${{ matrix.platform }}-x64"
+          mkdir -p "dist/package/${root}/ui"
+          cp target/release/utharness "dist/package/${root}/utharness"
+          cp -R ui/dist "dist/package/${root}/ui/dist"
+          cp README.md LICENSE "dist/package/${root}/"
+          tar -C dist/package -czf "dist/${root}.tar.gz" "${root}"
+      - name: Package Windows artifact
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $root = "utharnessly-windows-x64"
+          New-Item -ItemType Directory -Force "dist/package/$root/ui" | Out-Null
+          Copy-Item target/release/utharness.exe "dist/package/$root/utharness.exe"
+          Copy-Item ui/dist "dist/package/$root/ui/dist" -Recurse
+          Copy-Item README.md, LICENSE "dist/package/$root/"
+          Compress-Archive -Path "dist/package/$root/*" -DestinationPath "dist/$root.zip" -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish release assets
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum utharnessly-* > SHA256SUMS
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            dist/utharness-linux-x64
+            dist/utharnessly-*.tar.gz
+            dist/utharnessly-*.zip
             dist/SHA256SUMS

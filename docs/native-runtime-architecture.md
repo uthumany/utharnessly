@@ -7,7 +7,7 @@
 
 ## 1. Executive decision
 
-Utharness should be implemented as a **single native Rust process with explicit async boundaries**, backed by one local SQLite database and a small number of durable filesystem areas for configuration, secrets references, session exports, logs, and temporary artifacts. The process should expose two user surfaces over the same application core: the Ratatui/Crossterm terminal UI and scriptable CLI commands. An optional local Axum server should expose read/write application operations to the existing browser control plane and future integrations, but it must remain loopback-only by default.
+Utharness should be implemented as a **single native Rust process with explicit async boundaries**, backed by one local SQLite database and a small number of durable filesystem areas for configuration, secrets references, session exports, logs, and temporary artifacts. The process should expose two user surfaces over the same application core: the React/Ink terminal UI and scriptable CLI commands. An optional local Axum server should expose read/write application operations to the existing browser control plane and future integrations, but it must remain loopback-only by default.
 
 The application should not be split into a daemon and client in the first release. A daemon can be added later without changing domain contracts because the CLI, TUI, and HTTP adapter will already depend on the same `utharness-core` service interfaces. This keeps installation, crash recovery, and local security simple while preserving a clean path to a durable broker when background jobs, remote clients, or multi-process access become necessary.
 
@@ -21,8 +21,8 @@ The design is derived from the supplied product requirements. Utharness is a sta
 
 | Constraint | Architectural consequence |
 | --- | --- |
-| One native Rust binary | Keep domain logic in Rust crates; use TypeScript only for the Playwright browser sidecar. |
-| Persistent full-screen TUI plus direct CLI | Use one application service layer with Ratatui/Crossterm and Clap adapters. |
+| Native Rust runtime plus bundled UI | Keep domain logic and the CLI in Rust; keep the React/Ink terminal surface in the root `ui/` package and the browser sidecar separate. |
+| Persistent full-screen TUI plus direct CLI | Use one application service layer with React/Ink and Clap adapters. |
 | Local-first operation | Default all storage, logs, sessions, and memory to platform-specific local directories. |
 | Multiple providers and local models | Normalize provider requests, capabilities, streaming events, errors, and usage accounting behind a gateway trait. |
 | Tools can mutate the workspace | Every sensitive call passes through a permission decision and audit record before execution. |
@@ -42,7 +42,6 @@ utharness/
 ├── crates/
 │   ├── utharness-cli/          # Clap commands, exit codes, stdout/stderr contracts
 │   ├── utharness-core/         # Domain types, service ports, event model, state machine
-│   ├── utharness-tui/          # Ratatui application, views, keybindings, input routing
 │   ├── utharness-agent/        # Planner, executor, verification, context assembly
 │   ├── utharness-models/       # Model registry, capabilities, routing, usage metadata
 │   ├── utharness-tools/        # Files, shell, PTY, Git, HTTP, browser, process tools
@@ -55,6 +54,7 @@ utharness/
 │   ├── utharness-storage/      # SQLite pool, migrations, repositories, transactions
 │   ├── utharness-protocol/     # Versioned DTOs for local API and browser sidecar
 │   └── utharness-server/       # Axum loopback API, SSE, health and diagnostics routes
+├── ui/                         # TypeScript + React/Ink terminal UI
 ├── packages/
 │   └── browser-driver/         # TypeScript + Playwright sidecar
 ├── migrations/                 # Embedded, append-only SQLite migrations
@@ -67,7 +67,7 @@ utharness/
 
 ### 3.1 Dependency direction
 
-`utharness-core` is the dependency center and must not depend on TUI, CLI, Axum, Playwright, or concrete storage. It defines domain entities, commands, events, errors, and ports. `utharness-storage` implements persistence ports. `utharness-agent`, `utharness-tools`, `utharness-memory`, `utharness-scheduler`, and `utharness-agents` implement application services using core ports. `utharness-cli`, `utharness-tui`, and `utharness-server` are delivery adapters that compose the services in `utharness-cli`'s application bootstrap.
+`utharness-core` is the dependency center and must not depend on TUI, CLI, Axum, Playwright, or concrete storage. It defines domain entities, commands, events, errors, and ports. `utharness-storage` implements persistence ports. `utharness-agent`, `utharness-tools`, `utharness-memory`, `utharness-scheduler`, and `utharness-agents` implement application services using core ports. `utharness-cli`, `ui/`, and `utharness-server` are delivery adapters that compose the services in `utharness-cli`'s application bootstrap.
 
 | Crate | Owns | Must not own |
 | --- | --- | --- |
@@ -76,7 +76,7 @@ utharness/
 | `utharness-agent` | Agent loop and task orchestration | Direct terminal rendering or raw SQL |
 | `utharness-tools` | Tool schemas and concrete execution | Bypassing permission engine |
 | `utharness-security` | Authorization, sandboxing, redaction, audit | Provider selection or UI concerns |
-| `utharness-tui` | Layout, input, rendering, local view model | Direct file/shell/provider calls |
+| `ui/` | Layout, input, rendering, local view model | Direct file/shell/provider calls |
 | `utharness-server` | API DTOs, authentication on loopback, SSE | Independent business rules |
 
 ### 3.2 Core ports
@@ -117,7 +117,7 @@ The concrete `AppContext` should contain shared handles to repositories, policy 
 
 ```text
                  ┌─────────────────────────────┐
-                 │ CLI / Ratatui / Axum adapter │
+                 │ CLI / React/Ink / Axum adapter │
                  └──────────────┬──────────────┘
                                 │ commands + subscriptions
                  ┌──────────────▼──────────────┐
@@ -467,7 +467,7 @@ Provider adapters should use contract tests against a local mock server. Real pr
 | --- | --- | --- |
 | 0. Workspace foundation | Cargo workspace, error types, IDs, config paths, tracing, CI checks. | `cargo check`, formatting, lint, and empty binary work on Linux/macOS/Windows CI. |
 | 1. Storage kernel | SQLite open policy, migrations, repositories, event log, backup command. | Fresh install and upgrade tests pass; sessions and messages survive restart. |
-| 2. CLI and TUI shell | Clap commands, terminal lifecycle, Ratatui layout, keyboard routing, theme loading. | `utharness`, `init`, `version`, `sessions`, `resume`, `doctor` work without a provider. |
+| 2. CLI and TUI shell | Clap commands, terminal lifecycle, React/Ink layout, keyboard routing, theme loading. | `utharness`, `init`, `version`, `sessions`, `resume`, `doctor` work without a provider. |
 | 3. Local tools and security | File, shell, PTY, Git, policy engine, audit log. | Safe tools execute; denied and approval-required actions cannot bypass policy. |
 | 4. Agent runtime | Context builder, planner, task graph, provider gateway, streaming, checkpoints. | Mock-provider end-to-end task completes, pauses, cancels, and resumes. |
 | 5. Memory and skills | Memory CRUD/FTS5, scoped retrieval, built-in skill manifests and runner. | Memory search returns workspace-scoped ranked results; skills validate and run. |

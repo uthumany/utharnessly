@@ -558,7 +558,18 @@ fn launch_tui(headless: bool) -> Result<()> {
     let repository_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .canonicalize()?;
-    let ui_directory = repository_root.join("ui");
+    let executable_directory = env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(Path::to_path_buf));
+    let repository_ui_directory = repository_root.join("ui");
+    let installed_ui_directories = executable_directory
+        .clone()
+        .map(|path| vec![path.join("ui"), path.join("utharnessly-ui")])
+        .unwrap_or_default();
+    let ui_directory = installed_ui_directories
+        .into_iter()
+        .find(|path| path.join("dist/index.js").is_file())
+        .unwrap_or(repository_ui_directory);
     let ui_entry = env::var_os("UTHARNESS_UI_ENTRY")
         .map(PathBuf::from)
         .unwrap_or_else(|| ui_directory.join("dist/index.js"));
@@ -579,6 +590,9 @@ fn launch_tui(headless: bool) -> Result<()> {
         );
     };
 
+    if let Ok(runtime_binary) = env::current_exe() {
+        command.env("UTHARNESS_RUNTIME_BIN", runtime_binary);
+    }
     let status = command.current_dir(env::current_dir()?).status()?;
     if !status.success() {
         anyhow::bail!("TypeScript terminal UI exited with status {status}");

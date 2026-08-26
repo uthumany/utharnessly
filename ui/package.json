@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": { "node": ">=22" },
+  "packageManager": "pnpm@10.15.0",
   "description": "Reference-matched Utharness terminal UI built with React and Ink",
   "type": "module",
   "bin": {

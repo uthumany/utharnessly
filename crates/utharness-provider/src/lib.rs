@@ -76,10 +76,7 @@ impl OpenRouter {
             .client
             .post(format!("{}/chat/completions", self.base_url))
             .bearer_auth(&self.api_key)
-            .header(
-                "HTTP-Referer",
-                "https://github.com/uthumany/utharness-runtime",
-            )
+            .header("HTTP-Referer", "https://github.com/uthumany/utharnessly")
             .header("X-Title", "Utharness Agent Terminal")
             .json(&body)
             .send()

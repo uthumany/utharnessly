@@ -2,7 +2,7 @@
 
 ## Completed in this repository
 
-The first native runtime slice is deliberately small but real. It includes a four-crate Cargo workspace, embedded SQLite migrations, WAL-mode storage, persisted workspaces and sessions, ordered messages, tasks, checkpoints, runtime events, FTS5 memory, tool-call and audit tables, permission modes, workspace-aware shell execution, secret redaction, a Clap CLI, a Ratatui TUI, diagnostics, and process-level integration tests.
+The first native runtime slice is deliberately small but real. It includes a focused Cargo workspace, embedded SQLite migrations, WAL-mode storage, persisted workspaces and sessions, ordered messages, tasks, checkpoints, runtime events, FTS5 memory, tool-call and audit tables, permission modes, workspace-aware shell execution, secret redaction, a Clap CLI, a React/Ink terminal UI, diagnostics, and process-level integration tests.
 
 The offline planner is a deterministic provider-free mode. It makes the CLI useful on a clean machine and keeps tests credential-free. It is a provider boundary, not a pretend cloud integration.
 
@@ -16,7 +16,7 @@ The offline planner is a deterministic provider-free mode. It makes the CLI usef
 | Scheduler | Add once, interval, and cron jobs with leases, retry policy, and persisted run history. | Duplicate wakeup and process restart tests. |
 | Skills and MCP | Add manifest validation, built-in skill loader, activation state, MCP server lifecycle, tools, resources, and prompts. | Fixture servers and manifest tests. |
 | Local API | Add loopback-only Axum API, bearer token, SSE event replay, and browser control-plane projection. | API auth, reconnect, workspace scoping, and event ordering tests. |
-| Release engineering | Add platform builds, shell installer, npm/PyPI/JSR thin launchers, checksums, SBOM, signing, and release notes. | Clean-machine artifact and installer tests. |
+| Release engineering | Expand platform builds, publish signed shell/PowerShell archives, add npm/PyPI/JSR thin launchers where maintained, checksums, SBOM, signing, and release notes. | Clean-machine artifact and installer tests. |
 
 ## Definition of backend readiness
 
