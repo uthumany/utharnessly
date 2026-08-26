@@ -28,7 +28,6 @@ pub const ASCII_BANNER: [&str; 5] = [
 
 #[derive(Clone, Copy, Debug)]
 pub struct BannerTheme {
-    pub art: Color,
     pub wordmark: Color,
     pub subtitle: Color,
     pub version: Color,
@@ -37,7 +36,6 @@ pub struct BannerTheme {
 impl Default for BannerTheme {
     fn default() -> Self {
         Self {
-            art: Color::Cyan,
             wordmark: Color::Green,
             subtitle: Color::DarkGrey,
             version: Color::Grey,
@@ -53,19 +51,16 @@ impl BannerTheme {
             .as_str()
         {
             "midnight-cyan" => Self {
-                art: Color::Cyan,
                 wordmark: Color::Blue,
                 subtitle: Color::DarkGrey,
                 version: Color::Grey,
             },
             "ember" => Self {
-                art: Color::Yellow,
                 wordmark: Color::Red,
                 subtitle: Color::DarkGrey,
                 version: Color::Grey,
             },
             "mono-black" => Self {
-                art: Color::White,
                 wordmark: Color::White,
                 subtitle: Color::Grey,
                 version: Color::DarkGrey,
@@ -166,7 +161,7 @@ pub fn render_banner(width: u16, version: &str, ansi: bool) -> String {
             BannerMode::Compact if index == 0 => theme.wordmark,
             BannerMode::Compact if index == 1 => theme.subtitle,
             BannerMode::Compact => theme.version,
-            _ if index < 6 => theme.art,
+            BannerMode::Unicode | BannerMode::Ascii if index < 6 => gradient_color(index),
             _ if index == 6 => theme.wordmark,
             _ if index == 7 => theme.subtitle,
             _ => theme.version,
@@ -188,6 +183,41 @@ pub fn render_banner(width: u16, version: &str, ansi: bool) -> String {
     out
 }
 
+fn gradient_color(index: usize) -> Color {
+    match index {
+        0 => Color::Rgb {
+            r: 255,
+            g: 222,
+            b: 72,
+        },
+        1 => Color::Rgb {
+            r: 255,
+            g: 196,
+            b: 58,
+        },
+        2 => Color::Rgb {
+            r: 255,
+            g: 164,
+            b: 67,
+        },
+        3 => Color::Rgb {
+            r: 255,
+            g: 137,
+            b: 101,
+        },
+        4 => Color::Rgb {
+            r: 255,
+            g: 157,
+            b: 153,
+        },
+        _ => Color::Rgb {
+            r: 247,
+            g: 190,
+            b: 202,
+        },
+    }
+}
+
 fn ansi_code(color: Color) -> String {
     match color {
         Color::Black => "\x1b[30m".into(),
@@ -206,6 +236,34 @@ fn ansi_code(color: Color) -> String {
 
 fn ansi_reset() -> &'static str {
     "\x1b[0m"
+}
+
+pub fn print_onboarding_tips() -> anyhow::Result<()> {
+    let mut stdout = io::stdout();
+    let ansi = stdout.is_terminal() && std::env::var_os("NO_COLOR").is_none();
+    let cyan = if ansi {
+        ansi_code(Color::Cyan)
+    } else {
+        String::new()
+    };
+    let muted = if ansi {
+        ansi_code(Color::DarkGrey)
+    } else {
+        String::new()
+    };
+    let reset = if ansi { ansi_reset() } else { "" };
+    writeln!(stdout, "  {cyan}Tip{reset}  Start with a clear task or add {muted}@file  @folder  @agent  @skill  @memory{reset}")?;
+    writeln!(stdout, "  {cyan}Tip{reset}  Press {muted}Ctrl+K{reset} for commands · {muted}Enter{reset} sends · {muted}Shift+Enter{reset} adds a line")?;
+    stdout.flush()?;
+    if ansi && std::env::var_os("UTHARNESS_REDUCED_MOTION").is_none() {
+        let delay = std::env::var("UTHARNESS_STARTUP_SPLASH_MS")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(650)
+            .min(900);
+        thread::sleep(Duration::from_millis(delay));
+    }
+    Ok(())
 }
 
 pub fn print_startup_banner(version: &str) -> anyhow::Result<()> {

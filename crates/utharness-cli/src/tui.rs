@@ -9,7 +9,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, List, ListItem, Paragraph, Tabs, Wrap},
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
     Frame, Terminal,
 };
 use std::{io, process::Command, time::Duration};
@@ -20,74 +20,34 @@ const YELLOW: Color = Color::Rgb(239, 190, 93);
 const PURPLE: Color = Color::Rgb(185, 141, 255);
 const BLUE: Color = Color::Rgb(120, 173, 255);
 const MUTED: Color = Color::Rgb(126, 143, 157);
-const PANEL: Color = Color::Rgb(31, 42, 54);
 const SURFACE: Color = Color::Rgb(14, 21, 29);
+const SOFT: Color = Color::Rgb(210, 222, 229);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Focus {
-    Navigation,
     Chat,
-    Inspector,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum InspectorTab {
-    Task,
-    Context,
-    Agents,
-    Tools,
-    Git,
-}
-
-impl InspectorTab {
-    const ALL: [Self; 5] = [
-        Self::Task,
-        Self::Context,
-        Self::Agents,
-        Self::Tools,
-        Self::Git,
-    ];
-
-    fn title(self) -> &'static str {
-        match self {
-            Self::Task => "TASK",
-            Self::Context => "CONTEXT",
-            Self::Agents => "AGENTS",
-            Self::Tools => "TOOLS",
-            Self::Git => "GIT",
-        }
-    }
-
-    fn next(self) -> Self {
-        let index = Self::ALL.iter().position(|tab| *tab == self).unwrap_or(0);
-        Self::ALL[(index + 1) % Self::ALL.len()]
-    }
-
-    fn previous(self) -> Self {
-        let index = Self::ALL.iter().position(|tab| *tab == self).unwrap_or(0);
-        Self::ALL[(index + Self::ALL.len() - 1) % Self::ALL.len()]
-    }
+    Composer,
 }
 
 #[derive(Debug)]
 struct TuiState {
     focus: Focus,
-    inspector: InspectorTab,
-    nav_collapsed: bool,
     draft: String,
     sent_count: usize,
     status: String,
+    palette_open: bool,
+    attention_dismissed: bool,
 }
 
 impl Default for TuiState {
     fn default() -> Self {
         Self {
-            focus: Focus::Chat,
-            inspector: InspectorTab::Task,
-            nav_collapsed: false,
+            focus: Focus::Composer,
             draft: String::new(),
             sent_count: 0,
             status: "Ready · offline planner".into(),
+            palette_open: false,
+            attention_dismissed: false,
         }
     }
 }
@@ -97,54 +57,61 @@ impl TuiState {
         if key.modifiers.contains(KeyModifiers::CONTROL) {
             match key.code {
                 KeyCode::Char('c') => return true,
-                KeyCode::Char('b') => {
-                    self.nav_collapsed = !self.nav_collapsed;
-                    self.status = if self.nav_collapsed {
-                        "Navigation collapsed"
+                KeyCode::Char('k') => {
+                    self.palette_open = !self.palette_open;
+                    self.status = if self.palette_open {
+                        "Command palette open".into()
                     } else {
-                        "Navigation expanded"
-                    }
-                    .into();
+                        "Command palette closed".into()
+                    };
                 }
-                KeyCode::Char('1') => self.inspector = InspectorTab::Task,
-                KeyCode::Char('2') => self.inspector = InspectorTab::Context,
-                KeyCode::Char('3') => self.inspector = InspectorTab::Agents,
-                KeyCode::Char('4') => self.inspector = InspectorTab::Tools,
-                KeyCode::Char('5') => self.inspector = InspectorTab::Git,
+                KeyCode::Char('b') => {
+                    self.status = "Navigation is available from Ctrl+K".into();
+                    self.palette_open = true;
+                }
+                KeyCode::Char('l') => {
+                    self.draft.clear();
+                    self.status = "Composer cleared".into();
+                }
                 _ => {}
             }
             return false;
         }
+
+        if self.palette_open {
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q') => self.palette_open = false,
+                KeyCode::Char('1') => self.status = "Chat selected".into(),
+                KeyCode::Char('2') => self.status = "Tasks selected".into(),
+                KeyCode::Char('3') => self.status = "Files selected".into(),
+                KeyCode::Char('4') => self.status = "Agents selected".into(),
+                KeyCode::Char('5') => self.status = "Memory selected".into(),
+                _ => {}
+            }
+            return false;
+        }
+
         match key.code {
-            KeyCode::Char('q') if self.draft.is_empty() => return true,
             KeyCode::Tab => {
                 self.focus = match self.focus {
-                    Focus::Navigation => Focus::Chat,
-                    Focus::Chat => Focus::Inspector,
-                    Focus::Inspector => Focus::Navigation,
+                    Focus::Chat => Focus::Composer,
+                    Focus::Composer => Focus::Chat,
                 }
             }
             KeyCode::BackTab => {
                 self.focus = match self.focus {
-                    Focus::Navigation => Focus::Inspector,
-                    Focus::Chat => Focus::Navigation,
-                    Focus::Inspector => Focus::Chat,
+                    Focus::Chat => Focus::Composer,
+                    Focus::Composer => Focus::Chat,
                 }
             }
-            KeyCode::Left => self.inspector = self.inspector.previous(),
-            KeyCode::Right => self.inspector = self.inspector.next(),
-            KeyCode::Char('h') if self.focus == Focus::Inspector => {
-                self.inspector = self.inspector.previous()
-            }
-            KeyCode::Char('l') if self.focus == Focus::Inspector => {
-                self.inspector = self.inspector.next()
-            }
-            KeyCode::Char(c) => self.draft.push(c),
-            KeyCode::Backspace => {
+            KeyCode::Char(c) if self.focus == Focus::Composer => self.draft.push(c),
+            KeyCode::Backspace if self.focus == Focus::Composer => {
                 self.draft.pop();
             }
-            KeyCode::Enter => {
-                if !self.draft.trim().is_empty() {
+            KeyCode::Enter if self.focus == Focus::Composer => {
+                if key.modifiers.contains(KeyModifiers::SHIFT) {
+                    self.draft.push('\n');
+                } else if !self.draft.trim().is_empty() {
                     self.sent_count += 1;
                     self.status = format!("Message {} sent · planning", self.sent_count);
                     self.draft.clear();
@@ -157,6 +124,12 @@ impl TuiState {
             _ => {}
         }
         false
+    }
+
+    fn reference_prefix(&self) -> Option<&str> {
+        let line = self.draft.rsplit('\n').next().unwrap_or_default();
+        let start = line.rfind('@')?;
+        Some(&line[start + 1..])
     }
 }
 
@@ -190,460 +163,324 @@ fn draw_loop(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()
 
 fn render(frame: &mut Frame<'_>, state: &TuiState) {
     let area = frame.area();
-    let outer = Block::default().style(Style::default().bg(SURFACE));
-    frame.render_widget(outer, area);
-    if area.width < 52 || area.height < 14 {
-        render_tiny(frame, area, state);
+    frame.render_widget(Block::default().style(Style::default().bg(SURFACE)), area);
+    if area.width < 64 || area.height < 16 {
+        render_narrow(frame, area, state);
+        if state.palette_open {
+            render_palette(frame, area);
+        }
         return;
     }
+
     let sections = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),
-            Constraint::Min(8),
-            Constraint::Length(4),
             Constraint::Length(2),
+            Constraint::Min(6),
+            Constraint::Length(if state.reference_prefix().is_some() {
+                8
+            } else {
+                5
+            }),
+            Constraint::Length(2),
+            Constraint::Length(1),
         ])
         .split(area);
     render_header(frame, sections[0], area.width);
-    render_body(frame, sections[1], state);
+    render_chat(frame, sections[1], state);
     render_composer(frame, sections[2], state);
-    render_footer(frame, sections[3], state);
+    render_telemetry(frame, sections[3]);
+    render_footer(frame, sections[4], state);
+    if state.palette_open {
+        render_palette(frame, area);
+    }
 }
 
 fn render_header(frame: &mut Frame<'_>, area: Rect, width: u16) {
-    let branch = git_branch();
     let model = std::env::var("UTHARNESS_MODEL").unwrap_or_else(|_| "Offline Planner".into());
-    let path = std::env::current_dir()
-        .ok()
-        .and_then(|p| p.to_str().map(shorten_path))
-        .unwrap_or_else(|| "~/workspace".into());
-    let mut line = vec![
+    let provider = if model == "Offline Planner" {
+        "local"
+    } else {
+        "OpenRouter"
+    };
+    let branch = git_branch();
+    let path = current_workspace();
+    let mut spans = vec![
         Span::styled(
-            " UTHY ",
-            Style::default()
-                .fg(Color::Black)
-                .bg(CYAN)
-                .add_modifier(Modifier::BOLD),
+            "UTHY",
+            Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             "  ● ONLINE",
             Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" │ ", Style::default().fg(MUTED)),
+        Span::styled("  │  ", Style::default().fg(MUTED)),
+        Span::styled(provider, Style::default().fg(BLUE)),
+        Span::styled(" / ", Style::default().fg(MUTED)),
         Span::styled(model, Style::default().fg(Color::White)),
-        Span::styled(" │ ", Style::default().fg(MUTED)),
+        Span::styled("  │  ", Style::default().fg(MUTED)),
         Span::styled(branch, Style::default().fg(PURPLE)),
-        Span::styled(" │ ", Style::default().fg(MUTED)),
-        Span::styled(path, Style::default().fg(BLUE)),
     ];
-    if width >= 100 {
-        line.extend([
-            Span::styled(" │ ", Style::default().fg(MUTED)),
-            Span::styled("Context ", Style::default().fg(MUTED)),
-            Span::styled("15.4K/128K", Style::default().fg(Color::White)),
-            Span::styled(" │ ", Style::default().fg(MUTED)),
-            Span::styled("3 agents", Style::default().fg(PURPLE)),
+    if width >= 96 {
+        spans.extend([
+            Span::styled("  │  ", Style::default().fg(MUTED)),
+            Span::styled(path, Style::default().fg(BLUE)),
+            Span::styled("  │  ", Style::default().fg(MUTED)),
+            Span::styled("112.6K remaining", Style::default().fg(SOFT)),
         ]);
     }
-    frame.render_widget(
-        Paragraph::new(Line::from(line)).block(panel("", false)),
-        area,
-    );
-}
-
-fn render_body(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
-    let wide = area.width >= 100;
-    let medium = area.width >= 78;
-    let constraints = if wide && !state.nav_collapsed {
-        vec![
-            Constraint::Percentage(16),
-            Constraint::Percentage(60),
-            Constraint::Percentage(24),
-        ]
-    } else if medium {
-        vec![Constraint::Percentage(66), Constraint::Percentage(34)]
-    } else {
-        vec![Constraint::Percentage(100)]
-    };
-    let panes = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints(constraints)
-        .split(area);
-    let mut index = 0;
-    if wide && !state.nav_collapsed {
-        render_navigation(frame, panes[index], state);
-        index += 1;
-    }
-    render_chat(frame, panes[index], state);
-    index += 1;
-    if medium {
-        render_inspector(frame, panes[index], state);
-    }
-}
-
-fn render_navigation(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
-    let items = [
-        ("◆", "Chat", ""),
-        ("✓", "Tasks", "3"),
-        ("▤", "Files", ""),
-        ("◉", "Agents", "2"),
-        ("✦", "Skills", "34"),
-        ("◫", "Memory", ""),
-        ("◷", "Jobs", "1"),
-        ("◇", "Models", ""),
-        ("⚙", "Tools", ""),
-        ("≡", "Logs", ""),
-        ("⚙", "Settings", ""),
-    ];
-    let list = items
-        .iter()
-        .enumerate()
-        .map(|(index, (icon, name, count))| {
-            let selected = index == 0;
-            let marker = if selected { "▸" } else { " " };
-            let suffix = if count.is_empty() {
-                String::new()
-            } else {
-                format!("  {count}")
-            };
-            let style = if selected {
-                Style::default().fg(CYAN).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::White)
-            };
-            ListItem::new(Line::from(vec![
-                Span::styled(
-                    marker,
-                    Style::default().fg(if selected { CYAN } else { MUTED }),
-                ),
-                Span::raw(" "),
-                Span::styled(*icon, style),
-                Span::raw(" "),
-                Span::styled(*name, style),
-                Span::styled(suffix, Style::default().fg(MUTED)),
-            ]))
-        })
-        .collect::<Vec<_>>();
-    let title = if state.focus == Focus::Navigation {
-        " NAVIGATION · FOCUSED "
-    } else {
-        " NAVIGATION "
-    };
-    frame.render_widget(
-        List::new(list).block(panel(title, state.focus == Focus::Navigation)),
-        area,
-    );
+    frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
 fn render_chat(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
     let mut lines = vec![
-        Line::from(Span::styled(
-            "YOU",
-            Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
-        )),
-        Line::from("Fix the failing authentication tests and run the suite."),
+        Line::from(Span::styled("UTHARNESS", Style::default().fg(GREEN).add_modifier(Modifier::BOLD))),
+        Line::from("Welcome back. I can inspect this workspace, form a scoped plan, and ask before making changes."),
         Line::from(""),
-        Line::from(Span::styled(
-            "UTHARNESS",
-            Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
-        )),
-        Line::from("I found two failures related to session expiration."),
-        Line::from("The execution plan is staged below."),
-        Line::from(""),
-        Line::from(Span::styled(
-            "◆ READ  ",
-            Style::default().fg(BLUE).add_modifier(Modifier::BOLD),
-        )),
-        Line::from(Span::styled(
-            "src/auth/session.rs",
-            Style::default().fg(BLUE),
-        )),
-        Line::from(Span::styled(
-            "◆ READ  ",
-            Style::default().fg(BLUE).add_modifier(Modifier::BOLD),
-        )),
-        Line::from(Span::styled(
-            "tests/auth_test.rs",
-            Style::default().fg(BLUE),
-        )),
-        Line::from(""),
-        Line::from(Span::styled(
-            "╭─ EDIT  src/auth/session.rs ───────────────────────────╮",
-            Style::default().fg(BLUE),
-        )),
-        Line::from(Span::styled(
-            "│ +12  -4   View diff · Open file · Revert              │",
-            Style::default().fg(BLUE),
-        )),
-        Line::from(Span::styled(
-            "╰──────────────────────────────────────────────────────╯",
-            Style::default().fg(BLUE),
-        )),
-        Line::from(""),
-        Line::from(Span::styled(
-            "TESTER",
-            Style::default().fg(PURPLE).add_modifier(Modifier::BOLD),
-        )),
-        Line::from("Running authentication suite..."),
-        Line::from(Span::styled("✓ 14 / 14 passed", Style::default().fg(GREEN))),
+        Line::from(vec![
+            Span::styled("Tip  ", Style::default().fg(YELLOW).add_modifier(Modifier::BOLD)),
+            Span::styled("Start with a clear task. Use @file, @folder, @agent, @skill, or @memory to add context.", Style::default().fg(SOFT)),
+        ]),
     ];
-    if !state.status.is_empty() {
+    if !state.status.starts_with("Ready") {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             state.status.as_str(),
             Style::default().fg(YELLOW),
         )));
     }
+
+    let attention = provider_needs_setup() && !state.attention_dismissed;
+    if attention {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "╭─ PROJECT SETUP ─────────────────────────────────────────────────────────╮",
+            Style::default().fg(YELLOW),
+        )));
+        lines.push(Line::from(Span::styled("│ Offline Planner is active. Configure an API provider to enable model-backed execution. │", Style::default().fg(SOFT))));
+        lines.push(Line::from(Span::styled(
+            "╰─────────────────────────────────────────────────────────────────────────╯",
+            Style::default().fg(YELLOW),
+        )));
+    }
+
     let title = if state.focus == Focus::Chat {
-        " CHAT · FOCUSED "
+        "CHAT · FOCUSED"
     } else {
-        " CHAT "
+        "CHAT"
     };
     frame.render_widget(
-        Paragraph::new(lines)
-            .wrap(Wrap { trim: true })
-            .block(panel(title, state.focus == Focus::Chat)),
+        Paragraph::new(lines).wrap(Wrap { trim: true }).block(
+            Block::default()
+                .title(title)
+                .title_style(Style::default().fg(if state.focus == Focus::Chat {
+                    CYAN
+                } else {
+                    MUTED
+                })),
+        ),
         area,
     );
 }
 
-fn render_inspector(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
-    let tabs = InspectorTab::ALL
-        .iter()
-        .map(|tab| tab.title())
-        .collect::<Vec<_>>();
-    let vertical = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(8)])
-        .split(area);
-    let selected = InspectorTab::ALL
-        .iter()
-        .position(|tab| *tab == state.inspector)
-        .unwrap_or(0);
-    let tabs_widget = Tabs::new(tabs)
-        .select(selected)
-        .highlight_style(Style::default().fg(CYAN).add_modifier(Modifier::BOLD))
-        .divider("│")
-        .block(panel(" INSPECTOR ", state.focus == Focus::Inspector));
-    frame.render_widget(tabs_widget, vertical[0]);
-    let content = match state.inspector {
-        InspectorTab::Task => task_view(),
-        InspectorTab::Context => context_view(),
-        InspectorTab::Agents => agents_view(),
-        InspectorTab::Tools => tools_view(),
-        InspectorTab::Git => git_view(),
-    };
-    frame.render_widget(
-        Paragraph::new(content)
-            .wrap(Wrap { trim: true })
-            .block(panel(
-                state.inspector.title(),
-                state.focus == Focus::Inspector,
-            )),
-        vertical[1],
-    );
-}
-
-fn task_view() -> Vec<Line<'static>> {
-    vec![
-        Line::from(Span::styled(
-            "TASK  Fix authentication tests",
-            Style::default().fg(YELLOW).add_modifier(Modifier::BOLD),
-        )),
-        Line::from(""),
-        Line::from(Span::styled("✓ 01", Style::default().fg(GREEN))),
-        Line::from("   Inspect repository       0.8s"),
-        Line::from(Span::styled("✓ 02", Style::default().fg(GREEN))),
-        Line::from("   Load project memory      0.1s"),
-        Line::from(Span::styled("● 03", Style::default().fg(YELLOW))),
-        Line::from("   Analyze auth module      4.2s"),
-        Line::from(Span::styled("○ 04", Style::default().fg(MUTED))),
-        Line::from("   Edit implementation"),
-        Line::from(Span::styled("○ 05", Style::default().fg(MUTED))),
-        Line::from("   Run tests"),
-        Line::from(Span::styled("○ 06", Style::default().fg(MUTED))),
-        Line::from("   Review diff"),
-        Line::from(Span::styled("○ 07", Style::default().fg(MUTED))),
-        Line::from("   Checkpoint"),
-        Line::from(""),
-        Line::from(Span::styled(
-            "Progress  ████████░░░░░░░░ 43%",
-            Style::default().fg(CYAN),
-        )),
-    ]
-}
-
-fn context_view() -> Vec<Line<'static>> {
-    vec![
-        Line::from(Span::styled(
-            "CONTEXT",
-            Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
-        )),
-        Line::from(Span::styled(
-            "██████░░░░░░░░░░░░░░ 12%",
-            Style::default().fg(CYAN),
-        )),
-        Line::from("15.4K / 128K"),
-        Line::from(""),
-        Line::from("Messages                 6.2K"),
-        Line::from("Files                    4.1K"),
-        Line::from("Memory                   2.3K"),
-        Line::from("Tools                    1.7K"),
-        Line::from("System                   1.1K"),
-        Line::from(""),
-        Line::from(Span::styled(
-            "Ctrl+L  Compact context",
-            Style::default().fg(MUTED),
-        )),
-    ]
-}
-
-fn agents_view() -> Vec<Line<'static>> {
-    vec![
-        Line::from(Span::styled(
-            "AGENTS  3 active",
-            Style::default().fg(PURPLE).add_modifier(Modifier::BOLD),
-        )),
-        Line::from(""),
-        Line::from(Span::styled("● Lead", Style::default().fg(PURPLE))),
-        Line::from("  Planning implementation"),
-        Line::from(Span::styled("● Coder", Style::default().fg(PURPLE))),
-        Line::from("  Editing src/runtime.rs"),
-        Line::from(Span::styled("◐ Tester", Style::default().fg(YELLOW))),
-        Line::from("  cargo test"),
-        Line::from(Span::styled("○ Reviewer", Style::default().fg(MUTED))),
-        Line::from("  Waiting"),
-        Line::from(""),
-        Line::from(Span::styled(
-            "Ctrl+G  Spawn agent",
-            Style::default().fg(MUTED),
-        )),
-    ]
-}
-
-fn tools_view() -> Vec<Line<'static>> {
-    vec![
-        Line::from(Span::styled(
-            "TOOLS  1 running",
-            Style::default().fg(BLUE).add_modifier(Modifier::BOLD),
-        )),
-        Line::from(""),
-        Line::from(Span::styled("◆ SHELL", Style::default().fg(BLUE))),
-        Line::from("  $ cargo test"),
-        Line::from("  218 passed · 2 failed"),
-        Line::from("  Exit 101 · 4.8s"),
-        Line::from(""),
-        Line::from(Span::styled("○ EDIT", Style::default().fg(YELLOW))),
-        Line::from("  Awaiting approval"),
-        Line::from(""),
-        Line::from(Span::styled(
-            "Ctrl+T  Focus tool",
-            Style::default().fg(MUTED),
-        )),
-    ]
-}
-
-fn git_view() -> Vec<Line<'static>> {
-    vec![
-        Line::from(Span::styled(
-            "GIT  main ↑2",
-            Style::default().fg(PURPLE).add_modifier(Modifier::BOLD),
-        )),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("+12", Style::default().fg(GREEN)),
-            Span::raw(" insertions    "),
-            Span::styled("-4", Style::default().fg(Color::Red)),
-            Span::raw(" deletions"),
-        ]),
-        Line::from("M3 modified · ?1 untracked"),
-        Line::from(""),
-        Line::from(Span::styled(
-            "No commit created",
-            Style::default().fg(MUTED),
-        )),
-    ]
-}
-
 fn render_composer(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
-    let vertical = Layout::default()
+    let has_references = state.reference_prefix().is_some();
+    let constraints = if has_references {
+        vec![
+            Constraint::Min(3),
+            Constraint::Length(2),
+            Constraint::Length(1),
+        ]
+    } else {
+        vec![Constraint::Min(3), Constraint::Length(1)]
+    };
+    let sections = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(2), Constraint::Length(1)])
+        .constraints(constraints)
         .split(area);
     let input = if state.draft.is_empty() {
-        "> Ask Utharness...".to_string()
+        "Type your message or @path/to/file".to_string()
     } else {
-        format!("> {}", state.draft)
+        state.draft.clone()
     };
-    let input_style = if state.focus == Focus::Chat {
+    let style = if state.focus == Focus::Composer {
         Style::default().fg(Color::White)
     } else {
         Style::default().fg(MUTED)
     };
     frame.render_widget(
         Paragraph::new(input)
-            .style(input_style)
-            .block(panel(" MESSAGE ", state.focus == Focus::Chat)),
-        vertical[0],
-    );
-    frame.render_widget(
-        Paragraph::new(
-            " Enter Send │ Shift+Enter New Line │ @ Context │ / Commands │ Ctrl+K Palette",
-        )
-        .style(Style::default().fg(MUTED)),
-        vertical[1],
-    );
-}
-
-fn render_footer(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
-    let hints = match state.focus {
-        Focus::Chat => " Ctrl+B Navigation   Ctrl+1–5 Inspector   Ctrl+P Model   Ctrl+O Files   F1 Help   Ctrl+C Cancel ",
-        Focus::Navigation => " Tab Focus Chat   Ctrl+B Collapse   Enter Select   Ctrl+G Agents   F1 Help ",
-        Focus::Inspector => " ←/→ Tabs   Ctrl+1–5 Jump   Esc Clear   Ctrl+K Commands   Ctrl+C Cancel ",
-    };
-    frame.render_widget(
-        Paragraph::new(hints)
-            .style(Style::default().fg(MUTED))
+            .style(style)
+            .wrap(Wrap { trim: false })
             .block(
                 Block::default()
-                    .borders(Borders::TOP)
-                    .border_style(Style::default().fg(PANEL)),
+                    .title(" MESSAGE ")
+                    .title_style(Style::default().fg(CYAN))
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(CYAN)),
             ),
+        sections[0],
+    );
+    if let Some(prefix) = state.reference_prefix() {
+        let suggestions = reference_suggestions(prefix);
+        frame.render_widget(
+            Paragraph::new(suggestions)
+                .style(Style::default().fg(BLUE))
+                .block(
+                    Block::default()
+                        .title(" REFERENCES ")
+                        .title_style(Style::default().fg(BLUE))
+                        .borders(Borders::TOP),
+                ),
+            sections[1],
+        );
+        frame.render_widget(
+            Paragraph::new(
+                " Enter Send   Shift+Enter New line   @ References   Ctrl+K Commands   Ctrl+L Clear",
+            )
+            .style(Style::default().fg(MUTED)),
+            sections[2],
+        );
+    } else {
+        frame.render_widget(
+            Paragraph::new(
+                " Enter Send   Shift+Enter New line   @ References   Ctrl+K Commands   Ctrl+L Clear",
+            )
+            .style(Style::default().fg(MUTED)),
+            sections[1],
+        );
+    }
+}
+
+fn render_telemetry(frame: &mut Frame<'_>, area: Rect) {
+    let model = std::env::var("UTHARNESS_MODEL").unwrap_or_else(|_| "Offline Planner".into());
+    let provider = if model == "Offline Planner" {
+        "local"
+    } else {
+        "OpenRouter"
+    };
+    let telemetry = format!("workspace {}  │  permission SAFE  │  provider {}  │  model {}  │  branch {}  │  context 112.6K remaining", current_workspace(), provider, model, git_branch());
+    frame.render_widget(
+        Paragraph::new(telemetry).style(Style::default().fg(MUTED)),
         area,
     );
 }
 
-fn render_tiny(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
-    let text = vec![
-        Line::from(Span::styled(
-            "UTHY  ● ONLINE",
-            Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
-        )),
-        Line::from("────────────────────"),
-        Line::from(Span::styled("Chat", Style::default().fg(Color::White))),
-        Line::from("Offline Planner ready"),
-        Line::from("────────────────────"),
-        Line::from(if state.draft.is_empty() {
-            "> prompt"
-        } else {
-            "> draft"
-        }),
-        Line::from("Enter send · q quit"),
-    ];
-    frame.render_widget(Paragraph::new(text).block(panel(" UTHY ", true)), area);
+fn render_footer(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
+    let text = if state.focus == Focus::Composer {
+        "Tab Focus chat   Ctrl+K Command palette   Ctrl+L Clear   F1 Help   Ctrl+C Exit"
+    } else {
+        "Tab Focus composer   Ctrl+K Command palette   Ctrl+C Exit"
+    };
+    frame.render_widget(Paragraph::new(text).style(Style::default().fg(MUTED)), area);
 }
 
-fn panel(title: &str, focused: bool) -> Block<'static> {
-    Block::default()
-        .title(title.to_string())
-        .borders(Borders::ALL)
-        .border_type(if focused {
-            BorderType::Rounded
-        } else {
-            BorderType::Plain
-        })
-        .border_style(Style::default().fg(if focused { CYAN } else { PANEL }))
+fn render_narrow(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
+    let sections = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Min(5),
+            Constraint::Length(5),
+            Constraint::Length(1),
+        ])
+        .split(area);
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(
+                "UTHY",
+                Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("  ● ONLINE", Style::default().fg(GREEN)),
+        ])),
+        sections[0],
+    );
+    frame.render_widget(Paragraph::new("UTHARNESS\n\nWelcome back. Start with a task or add @context.\n\nOffline Planner ready.").wrap(Wrap { trim: true }), sections[1]);
+    let draft = if state.draft.is_empty() {
+        "Type your message or @path/to/file"
+    } else {
+        state.draft.as_str()
+    };
+    frame.render_widget(
+        Paragraph::new(draft).wrap(Wrap { trim: false }).block(
+            Block::default()
+                .title(" MESSAGE ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(CYAN)),
+        ),
+        sections[2],
+    );
+    frame.render_widget(
+        Paragraph::new("Ctrl+K Commands   Ctrl+C Exit").style(Style::default().fg(MUTED)),
+        sections[3],
+    );
+}
+
+fn render_palette(frame: &mut Frame<'_>, area: Rect) {
+    let popup = centered_rect(64, 58, area);
+    let items = "COMMAND PALETTE\n\n1  Chat                 Open conversation\n2  Tasks                Inspect execution\n3  Files                Browse workspace\n4  Agents               Manage agents\n5  Memory               Search project memory\n\nCtrl+P  Model   Ctrl+O  Files   Ctrl+G  Agents\nEsc     Close";
+    frame.render_widget(Clear, popup);
+    frame.render_widget(
+        Paragraph::new(items)
+            .style(Style::default().fg(SOFT))
+            .block(
+                Block::default()
+                    .title(" COMMANDS ")
+                    .title_style(Style::default().fg(CYAN))
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(CYAN)),
+            ),
+        popup,
+    );
+}
+
+fn reference_suggestions(prefix: &str) -> String {
+    let options = [
+        "file   src/main.rs",
+        "folder src/",
+        "agent @tester",
+        "skill @debugger",
+        "memory project notes",
+    ];
+    options
+        .iter()
+        .filter(|item| prefix.is_empty() || item.contains(prefix))
+        .take(4)
+        .copied()
+        .collect::<Vec<_>>()
+        .join("   ·   ")
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
+    let vertical = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(area);
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(vertical[1])[1]
+}
+
+fn provider_needs_setup() -> bool {
+    std::env::var_os("OPENROUTER_API_KEY").is_none()
+        && std::env::var_os("OPENAI_API_KEY").is_none()
+        && std::env::var_os("UTHARNESS_PROVIDER_URL").is_none()
+}
+
+fn current_workspace() -> String {
+    std::env::current_dir()
+        .ok()
+        .map(|path| shorten_path(&path.to_string_lossy()))
+        .unwrap_or_else(|| "~/workspace".into())
 }
 
 fn git_branch() -> String {
@@ -663,10 +500,10 @@ fn git_branch() -> String {
 
 fn shorten_path(path: &str) -> String {
     let home = std::env::var("HOME").unwrap_or_default();
-    if !home.is_empty() {
-        path.replacen(&home, "~", 1)
-    } else {
+    if home.is_empty() {
         path.to_string()
+    } else {
+        path.replacen(&home, "~", 1)
     }
 }
 
@@ -675,24 +512,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn keyboard_shortcuts_update_layout_state() {
-        let mut state = TuiState::default();
-        assert!(!state.nav_collapsed);
-        assert!(!state.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL)));
-        assert!(state.nav_collapsed);
-        assert_eq!(state.inspector, InspectorTab::Task);
-        state.handle_key(KeyEvent::new(KeyCode::Char('3'), KeyModifiers::CONTROL));
-        assert_eq!(state.inspector, InspectorTab::Agents);
-    }
-
-    #[test]
-    fn composer_accepts_and_sends_message() {
+    fn composer_supports_multiline_input_and_send() {
         let mut state = TuiState::default();
         state.handle_key(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE));
+        state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT));
         state.handle_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
-        assert_eq!(state.draft, "hi");
+        assert_eq!(state.draft, "h\ni");
         state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(state.draft.is_empty());
         assert_eq!(state.sent_count, 1);
+    }
+
+    #[test]
+    fn ctrl_k_opens_command_palette_without_stealing_input() {
+        let mut state = TuiState::default();
+        state.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL));
+        assert!(state.palette_open);
+        state.handle_key(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
+        assert!(state.palette_open);
+        state.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(!state.palette_open);
+    }
+
+    #[test]
+    fn references_are_detected_from_the_current_line() {
+        let state = TuiState {
+            draft: "Inspect @src/".into(),
+            ..Default::default()
+        };
+        assert_eq!(state.reference_prefix(), Some("src/"));
+        assert!(reference_suggestions("src").contains("src/main.rs"));
     }
 }

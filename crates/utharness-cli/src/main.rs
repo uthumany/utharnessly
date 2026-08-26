@@ -185,6 +185,7 @@ fn main() -> Result<()> {
         None => launch_tui(false),
         Some(CommandKind::Init(args)) => {
             banner::print_startup_banner(VERSION)?;
+            banner::print_onboarding_tips()?;
             let app = App::open(&args.workspace)?;
             println!("UTHARNESS initialized");
             println!("workspace: {}", app.workspace.canonical_path);
@@ -277,6 +278,7 @@ fn default_plan_summary() -> String {
 
 fn autonomous(args: AutonomousArgs) -> Result<()> {
     banner::print_startup_banner(VERSION)?;
+    banner::print_onboarding_tips()?;
     let root = fs::canonicalize(&args.workspace)?;
     let app = App::open(&root)?;
     let session = app.ensure_session("Autonomous agent test")?;
@@ -541,6 +543,7 @@ fn config_show() -> Result<()> {
 
 fn launch_tui(headless: bool) -> Result<()> {
     banner::print_startup_banner(VERSION)?;
+    banner::print_onboarding_tips()?;
     if headless || !io::stdin().is_terminal() || !io::stdout().is_terminal() {
         println!("UTHARNESS · AGENT TERMINAL");
         println!(

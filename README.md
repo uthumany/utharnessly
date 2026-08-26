@@ -95,9 +95,11 @@ The next backend milestones are provider adapters and streaming, task-graph pers
 
 ## TUI workspace
 
-The native TUI now uses the full available viewport instead of leaving the right side empty. Wide terminals use a `16% / 60% / 24%` navigation, chat, and inspector split. Medium terminals promote chat and inspector to a `66% / 34%` layout, while tiny terminals collapse to a single chat surface. The inspector combines Task, Context, Agents, Tools, and Git tabs, and the composer has its own dedicated bordered region.
+The native TUI uses a minimal, Qwen-inspired chat-first composition rather than permanent sidebars. The startup flow keeps the large UTHY banner, renders a yellow-to-orange-to-soft-pink ANSI gradient when color is available, and places concise onboarding tips directly below it. The persistent workspace then becomes a spacious conversation surface with intentional empty space, a single project-attention card when provider setup is missing, a wide cyan-bordered message composer, and a compact telemetry footer.
 
-The keyboard model keeps focus visible. `Tab` moves between navigation, chat, and inspector; `Ctrl+B` collapses navigation; `Ctrl+1` through `Ctrl+5` jump inspector tabs; `h` and `l` switch inspector tabs when the inspector is focused; `Enter` sends the draft; `Esc` clears it; and `q` or `Ctrl+C` exits. The footer changes its hints with the active focus region.
+The composer placeholder is `Type your message or @path/to/file`. It supports multiline input with `Shift+Enter`, `Enter` to send, and context references for `@file`, `@folder`, `@agent`, `@skill`, and `@memory`. While typing an `@` reference, a suggestions strip appears with matching workspace context targets. Navigation is available through `Ctrl+K` instead of permanently consuming viewport width; the palette exposes Chat, Tasks, Files, Agents, and Memory. `Ctrl+L` clears the composer, `Tab` moves between chat and composer, and `Ctrl+C` exits. Narrow terminals collapse the layout into a single chat surface while preserving the composer and essential footer controls.
+
+Telemetry shows the current workspace, permission mode, provider, model, Git branch, and remaining context. Semantic colors remain restrained: cyan marks focus, yellow marks warnings and tips, green marks success, red is reserved for errors, purple identifies agents, blue identifies tools, and gray carries secondary information.
 
 ## Startup banner
 
