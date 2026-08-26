@@ -5,6 +5,7 @@ members = [
   "crates/utharness-storage",
   "crates/utharness-security",
   "crates/utharness-cli",
+  "crates/utharness-provider",
 ]
 
 [workspace.package]

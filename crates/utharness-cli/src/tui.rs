@@ -213,6 +213,7 @@ fn render(frame: &mut Frame<'_>, state: &TuiState) {
 
 fn render_header(frame: &mut Frame<'_>, area: Rect, width: u16) {
     let branch = git_branch();
+    let model = std::env::var("UTHARNESS_MODEL").unwrap_or_else(|_| "Offline Planner".into());
     let path = std::env::current_dir()
         .ok()
         .and_then(|p| p.to_str().map(shorten_path))
@@ -230,7 +231,7 @@ fn render_header(frame: &mut Frame<'_>, area: Rect, width: u16) {
             Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
         ),
         Span::styled(" │ ", Style::default().fg(MUTED)),
-        Span::styled("Offline Planner", Style::default().fg(Color::White)),
+        Span::styled(model, Style::default().fg(Color::White)),
         Span::styled(" │ ", Style::default().fg(MUTED)),
         Span::styled(branch, Style::default().fg(PURPLE)),
         Span::styled(" │ ", Style::default().fg(MUTED)),

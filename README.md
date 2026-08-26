@@ -27,6 +27,11 @@ cargo test --workspace
 
 # Open the full-screen TUI from an interactive terminal
 ./target/release/utharness tui
+
+# Run a bounded OpenRouter-backed read-only autonomous inspection
+export OPENROUTER_API_KEY="..."
+export UTHARNESS_MODEL="openrouter/free"
+./target/release/utharness autonomous "Inspect this workspace and report its Git status" --max-steps 3
 ```
 
 The default storage location is `~/.local/share/utharness/utharness.db`. Set `UTHARNESS_HOME` or `UTHARNESS_DB` to use an isolated location for tests, CI, or portable deployments.
@@ -35,9 +40,10 @@ The default storage location is `~/.local/share/utharness/utharness.db`. Set `UT
 
 | Capability | Implementation |
 | --- | --- |
-| Native CLI | Clap commands for `init`, `chat`, `run`, `tui`, `doctor`, `config`, `sessions`, `memory`, `checkpoint`, `skills`, `providers`, `agents`, and `tools`. |
+| Native CLI | Clap commands for `init`, `chat`, `run`, `tui`, `autonomous`, `doctor`, `config`, `sessions`, `memory`, `checkpoint`, `skills`, `providers`, `agents`, and `tools`. |
 | SQLite persistence | Bundled SQLite with foreign keys, WAL mode, migration SQL, sessions, messages, tasks, checkpoints, events, memories, FTS5, tool calls, permissions, and audit tables. |
 | Offline chat | Deterministic offline planner response that persists both user and assistant messages without credentials. |
+| OpenRouter autonomy | OpenAI-compatible OpenRouter client that asks for a JSON plan, caps steps, executes only SAFE read-only tools, redacts output, and persists agent events. |
 | Memory | Workspace-scoped records and FTS5 search with triggers keeping the index synchronized. |
 | Safety | SAFE default, explicit `--allow` for shell execution, workspace-scoped execution, destructive-command denylist, and secret redaction. |
 | TUI | Ratatui/Crossterm alternate-screen interface with navigation, chat, task inspector, context meter, and keyboard exit handling. |
@@ -52,6 +58,7 @@ utharness init [--workspace PATH] Initialize a local workspace
 utharness chat PROMPT             Persist a prompt and offline planner response
 utharness run --command CMD       Refuse shell execution unless --allow is supplied
 utharness tui [--headless]        Open TUI or print a non-interactive status
+utharness autonomous PROMPT        Plan and execute bounded SAFE read-only tools through OpenRouter
 utharness doctor                  Run actionable local diagnostics
 utharness config show             Print effective local configuration
 utharness sessions list           List persisted sessions
@@ -81,7 +88,8 @@ The workspace is divided into four focused crates:
 | `utharness-core` | Shared IDs, domain records, state machines, permission types, provider metadata, and diagnostic models. |
 | `utharness-storage` | SQLite connection policy, embedded migrations, repositories, FTS5 search, and persistence tests. |
 | `utharness-security` | Permission modes, workspace path validation, shell policy, and secret redaction. |
-| `utharness-cli` | Clap commands, offline agent behavior, tool execution, diagnostics, and Ratatui TUI composition. |
+| `utharness-cli` | Clap commands, offline agent behavior, bounded autonomous execution, tool execution, diagnostics, and Ratatui TUI composition. |
+| `utharness-provider` | OpenRouter/OpenAI-compatible HTTP client with typed JSON plan responses and timeout/error handling. |
 
 The next backend milestones are provider adapters and streaming, task-graph persistence and leases, PTY/process supervision, Git and file tools, scheduler execution, skill loading, MCP, and the loopback Axum API for the browser control plane.
 
@@ -106,7 +114,7 @@ cargo test --workspace
 cargo build --release
 ```
 
-The repository intentionally has no committed credentials. Provider secrets should be added later through the OS keyring or environment variables and must never be persisted in logs, checkpoints, or prompts.
+The repository intentionally has no committed credentials. Provider secrets should be supplied through the OS keyring or environment variables and must never be persisted in logs, checkpoints, or prompts. The autonomous command is deliberately bounded: it accepts a model-generated JSON plan but executes only the SAFE allowlist (`list_directory`, `read_file`, `git_status`, and `git_diff`), limits the number of steps, scopes paths to the workspace, and records redacted results.
 
 ## License
 

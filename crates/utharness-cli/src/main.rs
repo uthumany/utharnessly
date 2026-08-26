@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
+use serde::Deserialize;
 use serde_json::json;
 use std::{
     env, fs,
@@ -8,6 +9,7 @@ use std::{
     process::Command,
 };
 use utharness_core::{MessageRole, PermissionMode};
+use utharness_provider::{ChatMessage, OpenRouter};
 use utharness_security::Policy;
 use utharness_storage::Storage;
 
@@ -29,6 +31,7 @@ enum CommandKind {
     Chat(ChatArgs),
     Run(RunArgs),
     Tui(TuiArgs),
+    Autonomous(AutonomousArgs),
     Doctor,
     Config {
         #[command(subcommand)]
@@ -76,6 +79,15 @@ struct RunArgs {
 struct TuiArgs {
     #[arg(long)]
     headless: bool,
+}
+
+#[derive(Args, Debug)]
+struct AutonomousArgs {
+    prompt: String,
+    #[arg(long, default_value_t = 3)]
+    max_steps: usize,
+    #[arg(long, default_value = ".")]
+    workspace: PathBuf,
 }
 
 #[derive(Subcommand, Debug)]
@@ -185,6 +197,7 @@ fn main() -> Result<()> {
         Some(CommandKind::Chat(args)) => chat(args),
         Some(CommandKind::Run(args)) => run_command(args),
         Some(CommandKind::Tui(args)) => launch_tui(args.headless),
+        Some(CommandKind::Autonomous(args)) => autonomous(args),
         Some(CommandKind::Doctor) => doctor(),
         Some(CommandKind::Config {
             action: ConfigAction::Show,
@@ -237,6 +250,150 @@ fn chat(args: ChatArgs) -> Result<()> {
     )?;
     println!("Uthy · OFFLINE PLANNER\n{}", response);
     Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+struct AgentPlan {
+    #[serde(default = "default_plan_summary")]
+    summary: String,
+    #[serde(default)]
+    steps: Vec<AgentStep>,
+    #[serde(default)]
+    final_response: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AgentStep {
+    tool: String,
+    #[serde(default)]
+    target: Option<String>,
+    #[serde(default)]
+    rationale: String,
+}
+
+fn default_plan_summary() -> String {
+    "Bounded workspace inspection".into()
+}
+
+fn autonomous(args: AutonomousArgs) -> Result<()> {
+    banner::print_startup_banner(VERSION)?;
+    let root = fs::canonicalize(&args.workspace)?;
+    let app = App::open(&root)?;
+    let session = app.ensure_session("Autonomous agent test")?;
+    let provider = OpenRouter::from_environment()?;
+    let max_steps = args.max_steps.clamp(1, 8);
+    let planner_prompt = format!(
+        "You are the Utharness autonomous planner. Return only valid JSON with this shape: {{\"summary\":\"short summary\",\"steps\":[{{\"tool\":\"list_directory|read_file|git_status|git_diff\",\"target\":\"relative path or null\",\"rationale\":\"short reason\"}}],\"final_response\":\"short completion note\"}}. Plan at most {max_steps} read-only steps. Never request shell, write, network, secrets, or paths outside the workspace. Task: {}",
+        args.prompt
+    );
+    let plan: AgentPlan = provider.complete_json(&[
+        ChatMessage {
+            role: "system".into(),
+            content: "You are a careful, deterministic coding-agent planner. Use only the tools explicitly allowed by the user-facing contract.".into(),
+        },
+        ChatMessage {
+            role: "user".into(),
+            content: planner_prompt,
+        },
+    ])?;
+    app.storage
+        .append_message(session.id, MessageRole::User, &args.prompt)?;
+    println!("AUTONOMOUS AGENT RUN");
+    println!("model: {}", provider.model());
+    println!("task:  {}", args.prompt);
+    println!("plan:  {}", plan.summary);
+    println!();
+
+    let policy = Policy::safe(root.clone());
+    let mut completed = 0usize;
+    let mut results = Vec::new();
+    for (index, step) in plan.steps.into_iter().take(max_steps).enumerate() {
+        let request = utharness_core::ToolRequest {
+            tool: step.tool.clone(),
+            target: step.target.clone(),
+            arguments: json!({}),
+        };
+        let decision = policy.evaluate(&request);
+        println!("{:02} {} · {:?}", index + 1, step.tool, decision);
+        if decision != utharness_core::PermissionDecision::Allow {
+            println!("   denied by SAFE policy");
+            continue;
+        }
+        let output = execute_autonomous_step(&policy, &root, &step)?;
+        let safe_output = Policy::redact(&output);
+        println!("   {}", safe_output.lines().next().unwrap_or("completed"));
+        app.storage.record_event(
+            "agent",
+            session.id,
+            "tool_completed",
+            &json!({"tool": step.tool, "target": step.target, "rationale": step.rationale, "output": safe_output}),
+            utharness_core::new_id(),
+        )?;
+        results.push(safe_output);
+        completed += 1;
+    }
+    let completion = format!(
+        "{} Completed {completed} approved read-only step(s). {}",
+        plan.final_response
+            .unwrap_or_else(|| "Workspace inspection finished.".into()),
+        if results.is_empty() {
+            "No tool output was returned."
+        } else {
+            "Results were persisted to the session event log."
+        }
+    );
+    app.storage
+        .append_message(session.id, MessageRole::Assistant, &completion)?;
+    app.storage.record_event(
+        "agent",
+        session.id,
+        "autonomous_completed",
+        &json!({"model": provider.model(), "completed_steps": completed, "max_steps": max_steps}),
+        utharness_core::new_id(),
+    )?;
+    println!();
+    println!("AGENT RESULT");
+    println!("{}", Policy::redact(&completion));
+    Ok(())
+}
+
+fn execute_autonomous_step(policy: &Policy, root: &Path, step: &AgentStep) -> Result<String> {
+    let target = step.target.as_deref().unwrap_or(".");
+    match step.tool.as_str() {
+        "list_directory" => {
+            let path = policy
+                .validate_path(Path::new(target))
+                .map_err(anyhow::Error::msg)?;
+            let mut entries = fs::read_dir(path)?
+                .filter_map(|entry| entry.ok())
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .collect::<Vec<_>>();
+            entries.sort();
+            Ok(entries.into_iter().take(32).collect::<Vec<_>>().join("\n"))
+        }
+        "read_file" => {
+            let path = policy
+                .validate_path(Path::new(target))
+                .map_err(anyhow::Error::msg)?;
+            let content = fs::read_to_string(path)?;
+            Ok(content.chars().take(4000).collect())
+        }
+        "git_status" => {
+            let output = Command::new("git")
+                .args(["status", "--short"])
+                .current_dir(root)
+                .output()?;
+            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        }
+        "git_diff" => {
+            let output = Command::new("git")
+                .args(["diff", "--stat"])
+                .current_dir(root)
+                .output()?;
+            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        }
+        other => anyhow::bail!("unsupported autonomous tool: {other}"),
+    }
 }
 
 fn run_command(args: RunArgs) -> Result<()> {
