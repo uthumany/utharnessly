@@ -4,7 +4,7 @@ set -euo pipefail
 REPOSITORY="${UTHARNESS_REPOSITORY:-uthumany/utharnessly}"
 VERSION="${UTHARNESS_VERSION:-latest}"
 INSTALL_DIR="${UTHARNESS_INSTALL_DIR:-${HOME}/.local/bin}"
-BASE_URL="https://github.com/${REPOSITORY}/releases"
+BASE_URL="${UTHARNESS_RELEASE_BASE_URL:-https://github.com/${REPOSITORY}/releases}"
 
 usage() {
   cat <<'EOF'
@@ -14,6 +14,7 @@ Environment:
   UTHARNESS_VERSION       Release tag without or with v; default: latest
   UTHARNESS_INSTALL_DIR   Destination directory; default: ~/.local/bin
   UTHARNESS_REPOSITORY    GitHub owner/repository; default: uthumany/utharnessly
+  UTHARNESS_RELEASE_BASE_URL  Optional release root override for mirrors/tests
 EOF
 }
 

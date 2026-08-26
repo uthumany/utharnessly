@@ -6,15 +6,16 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Repository = if ($env:UTHARNESS_REPOSITORY) { $env:UTHARNESS_REPOSITORY } else { 'uthumany/utharnessly' }
+$ReleaseBaseUrl = if ($env:UTHARNESS_RELEASE_BASE_URL) { $env:UTHARNESS_RELEASE_BASE_URL.TrimEnd('/') } else { "https://github.com/$Repository/releases" }
 if (-not $Version) { $Version = 'latest' }
 if (-not $InstallDir) { $InstallDir = Join-Path $HOME '.local\bin' }
 
 if ($Version -eq 'latest') {
-  $ReleaseUrl = "https://github.com/$Repository/releases/latest/download"
+  $ReleaseUrl = "$ReleaseBaseUrl/latest/download"
   $VersionLabel = 'latest'
 } else {
   $Version = $Version.TrimStart('v')
-  $ReleaseUrl = "https://github.com/$Repository/releases/download/v$Version"
+  $ReleaseUrl = "$ReleaseBaseUrl/download/v$Version"
   $VersionLabel = "v$Version"
 }
 

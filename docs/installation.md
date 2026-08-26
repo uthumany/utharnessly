@@ -1,60 +1,143 @@
-# utharnessly installation and platform guide
+# utharnessly installation, package, and platform guide
 
-This document separates **verified installation paths** from package-manager or platform entries that do not currently have a published utharnessly package. The public repository contains a Rust runtime and a bundled React/Ink UI. The interactive UI requires **Node.js 22 or newer**; the native CLI requires a Rust toolchain when built from source.
+`utharnessly` is distributed as a native Rust CLI with a bundled React/Ink terminal UI. The first public release provides signed release archives for **Linux x64, macOS x64, and Windows x64**, plus thin launchers on **npm** and **PyPI** that download and verify the matching native archive on first use. Other combinations are documented as source, remote-host, or unsupported paths rather than being presented as working installers.
 
-## Verified installation paths
+## Quick start
 
-| Method | Status | Installation | Executable entry point | PATH and dependency checks | Update, uninstall, and clean reinstall |
-| --- | --- | --- | --- | --- | --- |
-| `curl` | Verified for published POSIX release archives | `curl -fsSL https://raw.githubusercontent.com/uthumany/utharnessly/main/packaging/install.sh \\| bash` | `utharness` | Installs to `~/.local/bin`; ensure that directory is on `PATH`. Requires `curl`, `tar`, and `sha256sum`; the UI requires Node 22. | Re-run the installer with `UTHARNESS_VERSION=vX.Y.Z`; remove `~/.local/bin/utharness` and `~/.local/bin/utharnessly-ui`, then rerun for a clean install. |
-| `npm` | Verified for the UI package from a checkout | `npm --prefix ui install && npm --prefix ui run build` | `node ui/dist/index.js` or `npm --prefix ui start` | Requires Node 22 and npm. `npm --prefix ui run typecheck` checks the package. | `npm --prefix ui update`; `npm --prefix ui uninstall`; delete `ui/node_modules` and `ui/pnpm-lock.yaml` only when intentionally regenerating package-manager metadata. |
-| `npx` | Verified for source execution | `npx --yes tsx ui/src/index.tsx` | `npx tsx ui/src/index.tsx` | Uses the package manifest and Node 22. Prefer a lockfile-backed install for repeatable builds. | Use `npx --yes tsx@latest` only for diagnosis; clean reinstall with `rm -rf ui/node_modules && npm --prefix ui install`. |
-| `pnpm` / `pnpx` | Verified and CI-tested | `pnpm --dir ui install --frozen-lockfile && pnpm --dir ui build` | `pnpm --dir ui start`, `pnpx tsx ui/src/index.tsx`, or `./target/release/utharness tui` | Requires Node 22 and pnpm. The repository includes `ui/pnpm-lock.yaml`. | `pnpm --dir ui update`; `pnpm --dir ui remove PACKAGE`; clean reinstall with `rm -rf ui/node_modules && pnpm --dir ui install --frozen-lockfile`. |
-| Bun / `bunx` | Source-compatible | `bun --cwd ui install && bun --cwd ui run build` | `bun --cwd ui run start` or `bunx tsx ui/src/index.tsx` | Requires a Bun release with Node/npm compatibility. The Rust bridge still expects a `node` executable for the bundled entrypoint, so run the UI directly with Bun or provide `UTHARNESS_UI_ENTRY`. | `bun --cwd ui update`; `rm -rf ui/node_modules && bun --cwd ui install`. |
-| `Cargo` | Verified for the native runtime from source | `cargo build --release` | `./target/release/utharness`; run `./target/release/utharness tui` after building `ui/dist/index.js` | Requires Rust stable, Node 22, and pnpm for the UI bundle. A bare `cargo install` does not include the UI bundle and is therefore not advertised as a complete TUI installation. | `cargo update`; `cargo clean && cargo build --release`; remove `target/release/utharness` for uninstall. |
-| Git | Verified | `git clone https://github.com/uthumany/utharnessly.git && cd utharnessly` | `./target/release/utharness` after the build steps | Requires Git, Rust stable, Node 22, and pnpm. The repository is public and the old URL redirects to the renamed repository. | `git pull --ff-only`; delete the checkout and clone again for a clean reinstall. |
-| Homebrew | Source formula not yet published | Use the Git + Cargo + pnpm path until a signed Homebrew formula is published. | `utharness` after installing the release archive or source build | Do not use `brew install utharnessly` yet; that would claim a package that is not present in a Homebrew tap. | When a formula is published, use `brew upgrade utharnessly`, `brew uninstall utharnessly`, and `brew reinstall utharnessly`. |
-| `apt` | Source/release archive only | Use the `curl` release installer or build from Git. No Debian repository is claimed. | `utharness` | `apt` can install prerequisites such as `curl`, `git`, `build-essential`, and `pkg-config`; it does not currently install the product. | Remove the installed user binary and UI directory, then rerun the chosen verified path. |
-| Nix | Source shell only | `nix develop` is not currently provided; use the documented Git build with a Nix-provided Rust, Node, pnpm, and Git environment. | `./target/release/utharness` | No flake or Nixpkgs package is claimed until a reproducible derivation is maintained. | Re-enter the development shell and rebuild; remove `target/` for a clean source build. |
-| Volta, mise, fnm, nvm | Runtime setup, not product installers | Install Node 22 with the manager, then use the pnpm or npm UI path. | `node ui/dist/index.js` | These managers can place Node and package-manager shims on `PATH`; verify with `node --version` and `pnpm --version`. | Use the manager’s version switch/remove command, then reinstall dependencies with the selected runtime. |
-| Corepack | Verified as a pnpm bootstrap mechanism | `corepack enable && corepack prepare pnpm@latest --activate` followed by `pnpm --dir ui install --frozen-lockfile` | `pnpm --dir ui start` | Requires Node 22. Corepack manages pnpm; it does not install the Rust runtime. | `corepack prepare pnpm@latest --activate`; remove `ui/node_modules` for a clean dependency reinstall. |
-| Rush, Lerna, cnpm | Workspace orchestration alternatives | Not required by this repository. Use the existing single-package `ui` workspace and its lockfile. | Use `pnpm --dir ui ...` | Adding an orchestrator only to claim compatibility would create an unnecessary dependency and is intentionally avoided. | Do not run a package-manager migration unless a maintained workspace configuration is added. |
-| Deno | Direct source execution only | `deno run --allow-all --node-modules-dir=auto ui/src/index.tsx` on a Deno release with Node compatibility. | `deno run ... ui/src/index.tsx` | Deno compatibility depends on its Node/npm support and terminal behavior; the Rust launcher is Node-based. | Remove the Deno cache or use a fresh checkout; package builds remain Node/pnpm-based. |
-| `uv`, `uvx`, `pip`, `pipx`, `python -m` | PTY/automation support, not the product runtime | Use these tools for the repository’s Python PTY capture helpers; they are not claimed as Python distributions of the Rust/Ink application. | `python3 ui/test/pty_capture.py` | Requires Python 3.11+ and a terminal emulator. The CLI itself remains Rust plus Node. | Recreate the Python environment or use the system interpreter; no Python package uninstall is needed for the core product. |
-| `winget` | Windows prerequisite channel | Install Node 22 and Git with `winget`, then build from Git; no utharnessly winget manifest is claimed yet. | `utharness.exe` plus Node-launched UI | Use `winget install OpenJS.NodeJS.LTS Git.Git`; verify `node --version`, `git --version`, and `cargo --version`. | `winget upgrade`; uninstall prerequisites with their package IDs; rebuild the checkout for a clean product install. |
-
-## Release archive installer
-
-For a published POSIX release, the installer verifies the `SHA256SUMS` asset when available and installs the native executable plus bundled UI files into a user-owned directory:
+### Release archive on Linux or macOS
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/uthumany/utharnessly/main/packaging/install.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
+utharness --help
+utharness --version
 utharness
 ```
 
-PowerShell users can run:
+### Windows PowerShell
 
 ```powershell
 irm https://raw.githubusercontent.com/uthumany/utharnessly/main/packaging/install.ps1 | iex
+utharness --help
+utharness --version
 utharness
 ```
 
-The installer refuses unsupported operating systems and architectures instead of silently installing an incompatible artifact. When a matching release has not been published, it prints the source-build path.
+### npm, npx, pnpm, or pnpx
 
-## Operating systems and terminal environments
+```bash
+npm install --global utharnessly
+utharness --help
+utharness
 
-| Platform | Valid local workflow | Restricted or remote workflow |
-| --- | --- | --- |
-| Windows | Windows Terminal, WezTerm, Alacritty, Tabby, and Cmder can run the PowerShell installer or the Git source build. | Use WSL or a remote Linux host when Rust or Node tooling is unavailable. |
-| Linux | Kitty, WezTerm, Alacritty, Ghostty, and Tilix are supported ANSI terminals for the source build or release archive. | Use SSH to a Linux release host or a container with Node 22 and the native binary. |
-| Android | Termux is the closest supported local shell; install Git, Rust, Node, and pnpm there or SSH to a release host. Termius, ConnectBot, TermAI, and Moshi are SSH/client environments rather than native build targets. | Use SSH to a Linux/macOS host when the mobile client cannot run Rust or Node locally. |
-| macOS | Ghostty, iTerm2, Warp, WezTerm, and Kitty can run the POSIX installer or source build. | Use a Linux container or SSH when local toolchains are restricted. |
-| iOS/iPadOS | Blink Shell, Termius, Secure ShellFish, and compatible SSH clients should connect to a remote host. a-Shell and iSH are restricted shells and are not claimed as native Rust/Node targets. | Use the remote-host workflow; do not claim local installation where the platform cannot supply the required runtimes. |
-| FreeBSD/Unix | Kitty, Alacritty, WezTerm, xterm, and Konsole can render the ANSI UI. Build from source if Rust, Node 22, and pnpm are available. | Use a Linux-compatible container or SSH when a dependency is unavailable. |
-| Cross-platform | WezTerm, Alacritty, Termius, Tabby, and Hyper are terminal frontends; they do not install the product themselves. | Pair them with the platform-specific installer or a remote host. |
+npx --yes utharnessly --version
+pnpm add --global utharnessly
+pnpx utharnessly --help
+```
 
-The UI uses standard ANSI escape sequences, Unicode/ASCII fallbacks, Node stdin handling, and SIGWINCH where available. Terminal glyph metrics and mouse reporting vary by emulator; the PTY test matrix is authoritative for Linux, while the remaining platforms should run the same package tests and source-build checks in their native CI environments.
+The npm package installs two aliases, `utharnessly` and `utharness`. It downloads the release archive into the user cache, verifies `SHA256SUMS`, and forwards all arguments to the native runtime. `npx` and `pnpx` do not permanently install the launcher unless their package-manager cache is retained.
+
+### PyPI, pip, pipx, uv, or uvx
+
+```bash
+python -m pip install utharnessly
+utharnessly --help
+utharness
+
+pipx install utharnessly
+uv tool install utharnessly
+uvx utharnessly --version
+```
+
+The Python package is a dependency-free launcher. It uses the same release archive and checksum verification as npm. The package requires Python 3.9 or newer; the downloaded application itself is the native Rust runtime and bundled Ink UI.
+
+## Installation matrix
+
+| Method | Status | Copyable command or workflow | Entry point and requirements |
+|---|---|---|---|
+| `curl` | **Supported and tested** | `curl -fsSL https://raw.githubusercontent.com/uthumany/utharnessly/main/packaging/install.sh \| bash` | Installs a matching POSIX release archive into `~/.local/bin`; requires `curl`, `tar`, and `sha256sum`; add `~/.local/bin` to `PATH`. |
+| npm | **Supported and tested** | `npm install --global utharnessly` | Installs `utharness` and `utharnessly`; requires Node.js 18+ for the launcher and a supported release target. |
+| npx | **Supported and tested** | `npx --yes utharnessly --help` | Ephemeral npm launcher; native archive is cached per user. |
+| pnpm | **Supported and tested** | `pnpm add --global utharnessly` | Provides the same npm launcher; requires pnpm and Node.js 18+. |
+| pnpx | **Supported and tested** | `pnpx utharnessly --version` | Ephemeral pnpm launcher; native archive is cached per user. |
+| Bun / `bunx` | **Partially supported** | `bunx utharnessly --help` | Bun can execute the dependency-free npm launcher, but the downloaded native target still must match Linux x64, macOS x64, or Windows x64. Bun is not used to build the Ink bundle in release archives. |
+| Deno | **Source-only** | `deno run --allow-all --node-modules-dir=auto ui/src/index.tsx` | Useful for direct UI experiments where Deno Node compatibility works; not a supported native distribution channel. |
+| `uv` / `uvx` | **Supported and tested** | `uv tool install utharnessly` or `uvx utharnessly --version` | Installs the PyPI launcher; requires Python 3.9+ through uv and a supported native release target. |
+| `pip` / `pipx` / `python -m` | **Supported and tested** | `python -m pip install utharnessly`; `pipx install utharnessly` | Installs the PyPI launcher and its `utharness` alias; requires Python 3.9+. |
+| Cargo | **Source/native CLI only** | `cargo build --release` | Produces `target/release/utharness`; a bare `cargo install` does not include the bundled UI and is not advertised as a complete TUI install. |
+| Homebrew | **Unavailable as a product formula** | Use the curl installer or Git source workflow; do not run `brew install utharnessly`. | Homebrew can install prerequisites, but no maintained tap formula is published yet. |
+| apt | **Unavailable as a product repository** | Use the curl installer or Git source workflow; `sudo apt install git curl build-essential pkg-config` installs prerequisites only. | No Debian repository is claimed. |
+| Nix | **Source-only** | Provide Rust stable, Node 22, pnpm, and Git in a Nix shell, then use the source workflow. | No flake or Nixpkgs derivation is published yet. |
+| Volta / mise / fnm / nvm | **Prerequisite managers** | Install Node 22 with the manager, then use npm/pnpm or the source UI workflow. | These tools manage Node/PATH; they do not install the Rust runtime. Verify with `node --version`. |
+| Corepack | **Supported prerequisite path** | `corepack enable && corepack prepare pnpm@10.15.0 --activate && pnpm --dir ui install --frozen-lockfile` | Bootstraps the repository-pinned pnpm version; it does not install a published product binary. |
+| Rush / Lerna / cnpm | **Not required** | Use the repository’s pnpm lockfile and `pnpm --dir ui ...`; do not add an orchestrator solely for compatibility claims. | No Rush/Lerna workspace or cnpm-specific distribution is maintained. |
+| Git | **Supported source path** | `git clone https://github.com/uthumany/utharnessly.git && cd utharnessly` | Requires Rust stable, Node.js 22, and pnpm to build the complete CLI/TUI. |
+| winget | **Prerequisite channel** | `winget install OpenJS.NodeJS.LTS Git.Git` | Installs prerequisites on Windows; no utharnessly winget manifest is published. Use the PowerShell installer or source build afterward. |
+
+## Source installation and development
+
+```bash
+git clone https://github.com/uthumany/utharnessly.git
+cd utharnessly
+. "$HOME/.cargo/env"  # if Rustup is installed in the default location
+corepack enable
+corepack prepare pnpm@10.15.0 --activate
+pnpm --dir ui install --frozen-lockfile
+pnpm --dir ui typecheck
+pnpm --dir ui build
+cargo build --release
+./target/release/utharness --help
+./target/release/utharness tui --headless
+```
+
+The runtime stores SQLite data under the platform data directory, or under `UTHARNESS_HOME` when explicitly set. `UTHARNESS_DB` overrides the database path. Provider configuration is environment-based; credentials are not written by the installers.
+
+## Update, uninstall, and clean reinstall
+
+For the curl or PowerShell installers, rerun the installer with `UTHARNESS_VERSION=vX.Y.Z` after a release is published. For npm, use `npm update --global utharnessly`; for pnpm, use `pnpm update --global utharnessly`; for pip, use `python -m pip install --upgrade utharnessly`; for pipx, use `pipx upgrade utharnessly`; and for uv, use `uv tool upgrade utharnessly`. The launcher also accepts `utharnessly update` to clear and redownload its cached native archive.
+
+To uninstall the npm launcher, run `npm uninstall --global utharnessly` and remove the per-user cache at `$XDG_CACHE_HOME/utharnessly` or `~/.cache/utharnessly`. For Python, run `python -m pip uninstall utharnessly` or `pipx uninstall utharnessly`, then remove the same cache. The `uninstall` subcommand prints these commands without silently modifying a package-manager environment. For a clean source reinstall, remove the checkout and clone it again; remove `target/` and `ui/node_modules/` only when a clean rebuild is needed.
+
+## Compatibility matrix
+
+| Platform / runtime | Release archive | npm/PyPI launcher | Source build | Validation status |
+|---|---:|---:|---:|---|
+| Ubuntu/Linux x64 | Yes | Yes | Yes | **Tested locally and in hosted CI** |
+| macOS x64 | Yes | Yes | Yes | **Tested in hosted CI; native local shell not used** |
+| Windows x64 | Yes | Yes | Yes | **Tested in hosted CI; native local shell not used** |
+| Linux arm64 | No | No matching archive | Possible if Rust/Node toolchains are available | **Partially supported; source only** |
+| macOS arm64 | No | No matching archive | Possible if Rust/Node toolchains are available | **Partially supported; source only** |
+| Windows arm64 | No | No matching archive | Possible if Rust/Node toolchains are available | **Partially supported; source only** |
+| Android / Termux | No native release archive | No matching archive | Possible but not claimed as native-tested | **Remote/source workflow** |
+| iOS/iPadOS | No | No | No local native claim | **SSH/remote-host workflow** |
+| FreeBSD | No | No | Possible if dependencies are available | **Source/remote workflow** |
+| Other Unix-like systems | No | No | Possible if dependencies are available | **Source/remote workflow** |
+
+## Terminal matrix
+
+| Terminal environment | Status | Notes |
+|---|---|---|
+| Windows Terminal, WezTerm, Alacritty, Tabby, Cmder | **Supported rendering class** | Pair with the Windows x64 release or source workflow; Windows-hosted CI validates the CLI build, not every emulator. |
+| Kitty, WezTerm, Alacritty, Ghostty, Tilix on Linux | **Supported rendering class** | Linux PTY screenshots and terminal smoke tests were run on Linux; emulator-specific glyph differences remain possible. |
+| Ghostty, iTerm2, Warp, WezTerm, Kitty on macOS | **Supported rendering class** | Use the macOS x64 release or source workflow; hosted CI validates macOS builds. |
+| Termux | **Partially supported** | Closest Android local shell; source build may work when Rust and Node 22 are available, otherwise use SSH. |
+| Termius, ConnectBot, TermAI, Moshi | **Remote-client workflow** | These are SSH/client environments, not independently tested native build targets. |
+| Blink Shell, Secure ShellFish | **Remote-client workflow** | Connect to a supported Linux/macOS host. |
+| a-Shell, iSH | **Unsupported local native target** | Use SSH or a remote/container host. |
+| xterm, Konsole, Hyper | **ANSI terminal frontends** | Use a supported host and release/source installation; the frontend does not install utharnessly. |
 
 ## Troubleshooting
 
-If `utharness tui` reports that the UI bundle is missing, run `pnpm --dir ui install --frozen-lockfile && pnpm --dir ui build`, then retry. If the executable is not found after installation, add `~/.local/bin` to `PATH` and open a new shell. If the screen is garbled, check `TERM`, run with `NO_COLOR=1`, or use a terminal with UTF-8 and ANSI support. If a provider is unavailable, use the offline planner; provider credentials are read from environment variables and are never stored by the installer.
+If the native UI reports that its bundle is missing after a source build, run `pnpm --dir ui install --frozen-lockfile && pnpm --dir ui build`. If `utharness` is not found after the archive installer, add `~/.local/bin` to `PATH` and open a new shell. If a launcher reports that no binary exists for the current architecture, use a source build or a supported remote host; do not bypass the check. If the terminal is garbled, verify UTF-8 and ANSI support, inspect `TERM`, and try `NO_COLOR=1`. If a provider is unavailable, the offline planner and local diagnostics remain available; provider credentials are read from environment variables and are never stored by the package launchers.
+
+## Development checks
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace
+CI=1 pnpm --dir ui install --frozen-lockfile
+pnpm --dir ui typecheck
+pnpm --dir ui test
+pnpm --dir ui build
+```

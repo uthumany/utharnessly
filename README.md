@@ -128,6 +128,28 @@ utharness
 
 When a matching release archive is unavailable, these installers stop and print the Git source-build path instead of installing an unverified artifact.
 
+### npm and PyPI launchers
+
+The published npm and PyPI launchers download the matching native release archive on first use, verify its SHA-256 checksum, cache the bundled runtime/UI, and forward arguments to `utharness`.
+
+```bash
+# npm / npx / pnpm / pnpx
+npm install --global utharnessly
+utharness --help
+npx --yes utharnessly --version
+pnpm add --global utharnessly
+pnpx utharnessly
+
+# PyPI / pipx / uv / uvx
+python -m pip install utharnessly
+utharnessly --version
+pipx install utharnessly
+uv tool install utharnessly
+uvx utharnessly --help
+```
+
+Both registry launchers currently support Linux x64, macOS x64, and Windows x64 release artifacts. Use `utharnessly update` to clear and redownload the cached runtime. Use `utharnessly uninstall` to print the package-manager and cache-removal commands. The complete package-manager, source, platform, terminal, compatibility, and troubleshooting matrix is in [`docs/installation.md`](./docs/installation.md).
+
 ## Architecture
 
 | Component | Responsibility |
