@@ -118,12 +118,12 @@ function toolColor(tool: ToolCard, colorMode: ColorMode): string | undefined {
 export function ToolCardView({ tool, width, colorMode }: { tool: ToolCard; width: number; colorMode: ColorMode }) {
   const cardWidth = Math.max(28, Math.min(78, width - 8));
   const color = toolColor(tool, colorMode);
-  const status = tool.state === 'running' ? <Spinner label="Running" type="dots" /> : <Text color={color}>{tool.state === 'error' ? 'Error' : tool.state === 'approval' ? 'Approval required' : 'Completed'}</Text>;
+  const statusLabel = tool.state === 'running' ? 'Running' : tool.state === 'error' ? 'Error' : tool.state === 'approval' ? 'Approval required' : 'Completed';
   if (width < 100) {
     const compact = `${tool.icon} ${tool.name}  ${tool.state === 'running' ? 'Running' : tool.state === 'error' ? 'Error' : tool.state === 'approval' ? 'Approval' : 'Completed'}  ${tool.metric}  ${tool.elapsed}`;
     return (
       <Box width={cardWidth} borderStyle="round" borderColor={tone(palette.border, colorMode)} paddingX={1} marginTop={1}>
-        <Text color={toolColor(tool, colorMode)} wrap="truncate-end">{compact}</Text>
+          <Text color={toolColor(tool, colorMode)} wrap="truncate-end">{compact}</Text>
       </Box>
     );
   }
@@ -134,7 +134,7 @@ export function ToolCardView({ tool, width, colorMode }: { tool: ToolCard; width
           <Text color={tone(palette.purple, colorMode)} wrap="truncate-end">{tool.icon} {tool.name}</Text>
         </Box>
         <Box width={Math.max(12, Math.floor((cardWidth - 2) * 0.28))}>
-          <Text color={toolColor(tool, colorMode)} wrap="truncate-end">{status}</Text>
+          {tool.state === 'running' ? <Spinner label="Running" type="dots" /> : <Text color={color} wrap="truncate-end">{statusLabel}</Text>}
         </Box>
         <Box flexGrow={1} justifyContent="flex-end">
           <Text color={tone(palette.text, colorMode)} wrap="truncate-end">{tool.metric}  {tool.elapsed}</Text>
