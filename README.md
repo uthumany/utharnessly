@@ -25,7 +25,9 @@ cargo test --workspace
 ./target/release/utharness doctor
 ./target/release/utharness config show
 
-# Open the full-screen TUI from an interactive terminal
+# Build and open the full-screen TypeScript/Ink TUI from an interactive terminal
+pnpm --dir ui install
+pnpm --dir ui build
 ./target/release/utharness tui
 
 # Run a bounded OpenRouter-backed read-only autonomous inspection
@@ -88,28 +90,35 @@ The workspace is divided into four focused crates:
 | `utharness-core` | Shared IDs, domain records, state machines, permission types, provider metadata, and diagnostic models. |
 | `utharness-storage` | SQLite connection policy, embedded migrations, repositories, FTS5 search, and persistence tests. |
 | `utharness-security` | Permission modes, workspace path validation, shell policy, and secret redaction. |
-| `utharness-cli` | Clap commands, offline agent behavior, bounded autonomous execution, tool execution, diagnostics, and Ratatui TUI composition. |
+| `utharness-cli` | Clap commands, offline agent behavior, bounded autonomous execution, tool execution, diagnostics, and the Rust-to-Ink launcher bridge. |
 | `utharness-provider` | OpenRouter/OpenAI-compatible HTTP client with typed JSON plan responses and timeout/error handling. |
 
 The next backend milestones are provider adapters and streaming, task-graph persistence and leases, PTY/process supervision, Git and file tools, scheduler execution, skill loading, MCP, and the loopback Axum API for the browser control plane.
 
-## TUI workspace
+## Reference-matched TypeScript terminal UI
 
-Focus Mode is now the default native TUI. It contains only the UTHY identity/header, conversation history, active task or warning cards, the fixed message composer, and the bottom status bar. Navigation, model selection, files, agents, tasks, memory, logs, provider, skills, settings, help, and the SAFE permission request are keyboard-triggered overlays instead of permanent panels. `Ctrl+B` toggles the three-column Navigation | Chat | Inspector layout as optional Workspace Mode.
+The interactive terminal has been rebuilt rather than incrementally patched. The Rust command now launches `ui/dist/index.js` through Node 22, with a `pnpm --dir ui dev` fallback for source checkouts that have not built the bundle. The UI is a full-screen persistent React/Ink application using `@inkjs/ui`, `chalk`, `gradient-string`, `cli-spinners`, `figures`, `string-width`, `wrap-ansi`, `execa`, `chokidar`, and `zod`.
 
-The renderer follows explicit terminal breakpoints: `120+` columns use Focus Mode by default and permit Workspace Mode, `80–119` use full-width chat, `60–79` use compact chat, and widths below `60` use minimal text mode. Live resize events are handled by Crossterm. Mouse capture supports scroll-wheel history movement and composer focus, while `PageUp`/`PageDown` and arrow keys provide independent chat scrolling.
+Every display uses one left-aligned content grid. The header, ASCII branding, tips, workspace warning, prompt, and status bar are fixed; only the conversation viewport is height-constrained and scrollable. The header presents `UTHARNESS AGENT — focus mode` and `Ctrl+K`/help affordances. The persistent banner uses wide, medium, and compact ASCII variants, retains the word `UTHARNESS` on every display, and applies the requested amber-to-orange-to-coral gradient in truecolor terminals. The prompt is a cyan rounded border with `Type your message or @path/to/file`, slash command suggestions, `@file`, `@folder`, `@url`, `@agent`, `@skill`, and `@memory` context suggestions, and command history navigation.
 
-Conversation history reads the latest persisted SQLite session when available and renders agent activity inline. Completed PLAN, SHELL, FILE, EDIT, DIFF, GIT, BROWSER, AGENT, MEMORY, SKILL, MCP, TEST, ERROR, and permission cards stay compact; the active operation expands with a marker, progress, and elapsed time. The message composer remains the strongest interactive element with a cyan focus border, placeholder `Type your message or @path/to/file`, multiline `Shift+Enter`, `Enter` to send, and context references for `@file`, `@folder`, `@url`, `@agent`, `@skill`, and `@memory`. Submitted messages are appended to the real SQLite session journal and recorded as runtime events.
+The conversation is composed of UTHY and YOU rows with timestamps, streaming token updates, running/completed tool cards, success/error/approval states, result summaries, and responsive wrapping. `Ctrl+K` opens the command palette; `PageUp`/`PageDown` scroll the conversation; arrow keys recall command history; mouse-wheel escape sequences adjust the viewport; and SIGWINCH triggers a redraw on resize. Runtime metadata is loaded through the native CLI boundary and filesystem/Git state is watched with Chokidar. If the native binary is available, prompt submissions invoke its persisted offline chat path through `execa`; otherwise the UI uses a bounded offline planner response.
 
-The Focus Mode shortcut map is `Ctrl+K` command palette, `Ctrl+P` model picker, `Ctrl+O` file picker, `Ctrl+G` agent manager, `Ctrl+T` task inspector, `Ctrl+M` memory, `Ctrl+L` logs, `Ctrl+Y` SAFE permission dialog, `Ctrl+B` Workspace Mode, and `F1` help. Model and provider selections are process-local for the current session; credentials remain environment-backed. The task, memory, and logs overlays query persisted SQLite records, while the file picker reads the current workspace filesystem. The bottom telemetry shows workspace, permission mode, provider/model, Git branch, and context remaining.
+The fixed terminal breakpoints are `40–59` compact, `60–79` narrow, `80–119` standard, `120–199` wide, and `200+` ultra-wide. The compact layout preserves the explicit UTHARNESS identity, reduced prompt copy, and abbreviated status. TrueColor, ANSI 256, ANSI 16, and monochrome/no-color environments are selected from `COLORTERM`, `TERM`, `UTHARNESS_COLOR`, `UTHARNESS_ASCII`, and `NO_COLOR`. The implementation relies on standard ANSI input and SIGWINCH behavior and is designed for Linux, macOS, Windows Terminal, WSL, SSH, and tmux; each host’s terminal emulator still controls the final glyph metrics.
 
-Semantic colors remain restrained: cyan marks focus, yellow marks warnings and progress, green marks success, red marks errors, purple marks agents, blue marks tools, and gray carries secondary information. The TUI adapts from TrueColor to ANSI 256, ANSI 16, or monochrome based on `COLORTERM`, `TERM`, `UTHARNESS_COLOR`, `UTHARNESS_ASCII`, and `NO_COLOR`. Set `UTHARNESS_REDUCED_MOTION=1` for reduced animation behavior.
+## UI development and screenshots
 
-## Startup banner
+```bash
+cd ui
+pnpm install
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm screenshots
+```
 
-Every `utharness` startup begins with the large **UTHY** block-letter banner before the setup or terminal workspace begins. The premium startup keeps the logo upper-left, adds layered block/shadow depth, and uses a gold-to-amber-to-coral ANSI gradient when color is available. It then shows four numbered getting-started tips: asking questions/editing files/executing commands, using `@file` for project context, creating `UTHARNESS.md` for project instructions, and using `/help` to explore commands. `utharness init` and `utharness tui` use the same startup path. Wide terminals render the Unicode-safe UTHY wordmark; medium terminals use a smaller ASCII-safe fallback; terminals below 42 columns switch to a compact layout. The banner stays responsive to terminal width and includes the current package version.
+The PTY matrix exercises `40x18`, `60x20`, `80x24`, `120x36`, `160x40`, and `220x44`, plus a command-palette capture. Generated PNGs are kept under `ui/screenshots/` during development and are not required at runtime. The Rust bridge can be verified with `cargo build --release` followed by `./target/release/utharness tui` from an interactive terminal. Set `UTHARNESS_UI_ENTRY` to point the Rust launcher at a custom compiled UI bundle.
 
-The banner paints immediately by default so the CLI identity appears without startup delay. Set `UTHARNESS_BANNER_ANIMATION=typein` to opt into the restrained line-by-line reveal, and `UTHARNESS_STARTUP_SPLASH_MS` to tune the short onboarding pause. ANSI theme colors are used when attached to a terminal. Set `UTHARNESS_THEME=midnight-cyan`, `UTHARNESS_THEME=ember`, or `UTHARNESS_THEME=mono-black` to select a built-in palette. Set `UTHARNESS_ASCII=1` or `NO_COLOR=1` to force ASCII/no-color output. Set `UTHARNESS_REDUCED_MOTION=1` or `REDUCED_MOTION=1` to disable animation. When the persistent TUI starts outside a Git project, it shows a single yellow setup card: “You are running Utharness outside a project workspace. Open a project directory for repository-aware agent features.”
+The UI is distributed as a normal Node package and supports the common command runners: `npm install && npm run build`, `npx tsx ui/src/index.tsx`, `pnpm --dir ui install && pnpm --dir ui build`, `yarn --cwd ui install && yarn --cwd ui build`, and `bun --cwd ui install && bun --cwd ui run build`. Deno can execute the source entrypoint with its Node-compatibility mode when dependencies are available; `uv` and `pipx` remain supported for surrounding Python-based PTY/automation workflows. Git users can clone the private repository, build the Rust binary, build `ui/dist/index.js`, and run `utharness tui` from a workspace.
 
 ## Development
 

@@ -14,7 +14,6 @@ use utharness_security::Policy;
 use utharness_storage::Storage;
 
 mod banner;
-mod tui;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -542,9 +541,9 @@ fn config_show() -> Result<()> {
 }
 
 fn launch_tui(headless: bool) -> Result<()> {
-    banner::print_startup_banner(VERSION)?;
-    banner::print_onboarding_tips()?;
     if headless || !io::stdin().is_terminal() || !io::stdout().is_terminal() {
+        banner::print_startup_banner(VERSION)?;
+        banner::print_onboarding_tips()?;
         println!("UTHARNESS · AGENT TERMINAL");
         println!(
             "● ONLINE · offline planner · workspace {}",
@@ -555,7 +554,36 @@ fn launch_tui(headless: bool) -> Result<()> {
         );
         return Ok(());
     }
-    tui::run()
+
+    let repository_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()?;
+    let ui_directory = repository_root.join("ui");
+    let ui_entry = env::var_os("UTHARNESS_UI_ENTRY")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| ui_directory.join("dist/index.js"));
+
+    let mut command = if ui_entry.is_file() {
+        let mut command = Command::new("node");
+        command.arg(ui_entry);
+        command
+    } else if ui_directory.join("package.json").is_file() {
+        let mut command = Command::new("pnpm");
+        command.args(["--dir", ui_directory.to_string_lossy().as_ref(), "dev"]);
+        command
+    } else {
+        anyhow::bail!(
+            "TypeScript terminal UI is unavailable. Build it with `pnpm --dir {} install && pnpm --dir {} build` or set UTHARNESS_UI_ENTRY.",
+            ui_directory.display(),
+            ui_directory.display()
+        );
+    };
+
+    let status = command.current_dir(env::current_dir()?).status()?;
+    if !status.success() {
+        anyhow::bail!("TypeScript terminal UI exited with status {status}");
+    }
+    Ok(())
 }
 
 #[cfg(test)]
