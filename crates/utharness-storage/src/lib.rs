@@ -232,6 +232,47 @@ impl Storage {
         })
     }
 
+    pub fn recent_events(&self, limit: usize) -> Result<Vec<String>> {
+        let limit = limit.min(100) as i64;
+        self.with_connection(|conn| {
+            let mut stmt = conn.prepare("SELECT event_type, payload_json, created_at FROM runtime_events ORDER BY created_at DESC LIMIT ?1")?;
+            let rows = stmt.query_map(params![limit], |row| {
+                let event_type: String = row.get(0)?;
+                let payload: String = row.get(1)?;
+                let created_at: i64 = row.get(2)?;
+                Ok(format!("{created_at}  {event_type}  {payload}"))
+            })?;
+            Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
+        })
+    }
+
+    pub fn recent_memories(
+        &self,
+        workspace_id: Option<Id>,
+        limit: usize,
+    ) -> Result<Vec<MemoryRecord>> {
+        let limit = limit.min(100) as i64;
+        self.with_connection(|conn| {
+            let mut stmt = conn.prepare("SELECT id, workspace_id, session_id, scope, kind, content, source, importance, metadata_json, created_at, updated_at FROM memories WHERE deleted_at IS NULL AND (?1 IS NULL OR workspace_id = ?1) ORDER BY updated_at DESC LIMIT ?2")?;
+            let rows = stmt.query_map(params![workspace_id.map(|v| v.to_string()), limit], |row| {
+                Ok(MemoryRecord {
+                    id: parse_id(row.get::<_, String>(0)?)?,
+                    workspace_id: row.get::<_, Option<String>>(1)?.map(parse_id).transpose()?,
+                    session_id: row.get::<_, Option<String>>(2)?.map(parse_id).transpose()?,
+                    scope: row.get(3)?,
+                    kind: row.get(4)?,
+                    content: row.get(5)?,
+                    source: row.get(6)?,
+                    importance: row.get(7)?,
+                    metadata: serde_json::from_str(&row.get::<_, String>(8)?).unwrap_or(Value::Object(Default::default())),
+                    created_at: row.get(9)?,
+                    updated_at: row.get(10)?,
+                })
+            })?;
+            Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
+        })
+    }
+
     pub fn integrity_check(&self) -> Result<String> {
         self.with_connection(|conn| {
             Ok(conn.query_row("PRAGMA integrity_check", [], |row| row.get(0))?)

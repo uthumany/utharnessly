@@ -4,20 +4,18 @@
 
 ### Added
 
-- Focus Mode as the default terminal experience: conversation-first history, inline activity cards, keyboard-triggered overlays, fixed cyan composer, compact telemetry, and optional Workspace Mode via Ctrl+B.
-- Overlay routes for command palette, model picker, file picker, agent manager, task inspector, memory, logs, and help.
+- Native Rust workspace with focused core, storage, security, provider, and CLI crates.
+- SQLite WAL persistence with embedded migrations, sessions, messages, tasks, checkpoints, runtime events, tool calls, permission decisions, audit records, and FTS5 memory search.
+- SAFE default execution boundary with workspace scoping, destructive-command denial, output redaction, and explicit approval for shell execution.
+- Offline-first chat and bounded OpenRouter-compatible autonomous inspection using a SAFE read-only tool allowlist.
+- Responsive UTHY startup banner with layered logo depth, gold-to-amber-to-coral color treatment, Unicode/ASCII fallbacks, onboarding tips, project warning state, version display, reduced-motion support, and opt-in type-in animation.
+- Focus Mode as the default Ratatui/Crossterm terminal experience, with conversation-first history, inline PLAN/SHELL/FILE/EDIT/DIFF/GIT/BROWSER/AGENT/MEMORY/SKILL/MCP/TEST/ERROR/permission cards, fixed cyan composer, live elapsed activity, telemetry, and optional Workspace Mode through `Ctrl+B`.
+- Exact responsive TUI breakpoints: wide `120+` Focus/Workspace, full-width `80–119`, compact `60–79`, and minimal text mode below `60` columns.
+- Keyboard-triggered command, model, provider, file, agent, task, memory, logs, skills, settings, permission, and help overlays. Task, memory, and log views read persisted SQLite state; the file picker reads the workspace filesystem; model/provider choices are process-local.
+- Composer multiline editing, `@file`/`@folder`/`@url`/`@agent`/`@skill`/`@memory` references, slash autocomplete for `/model`, `/provider`, `/agents`, `/files`, `/git`, `/tasks`, `/memory`, `/skills`, `/theme`, `/settings`, and `/doctor`, mouse-aware scrolling/focus, resize handling, and independent chat scrolling.
+- Terminal palette fallback from TrueColor to ANSI 256, ANSI 16, and monochrome based on terminal capability/environment settings.
+- Unit, persistence, security, CLI process, breakpoint, slash-command, and palette fallback tests, with CI, security auditing, and release packaging workflows.
 
-- Premium UTHY startup experience with upper-left layered logo depth, gold-to-amber-to-coral ANSI gradient, responsive Unicode/ASCII fallbacks, numbered onboarding tips, and an outside-project warning card.
-- Minimal initial chat surface with cyan composer focus and compact telemetry.
+### Notes
 
-- Full-viewport Ratatui workspace with dominant chat, responsive navigation, tabbed inspector, live task timeline, tool cards, dedicated composer, contextual keyboard hints, and tiny-terminal fallback.
-- Instant startup banner with large UTHY block lettering, ANSI themes, Unicode/ASCII fallback, compact narrow-terminal mode, version display, and opt-in type-in animation.
-- Native Rust workspace with core, storage, security, and CLI crates.
-- SQLite WAL persistence with embedded initial migration and FTS5 memory search.
-- Persisted workspaces, sessions, messages, tasks, checkpoints, runtime events, tool calls, permission decisions, and audit records.
-- SAFE and explicit approval shell execution with workspace scoping, denylist checks, and output redaction.
-- Offline-first chat path that works without provider credentials.
-- Clap CLI commands for initialization, chat, shell execution, TUI status, sessions, memory, checkpoints, skills, providers, agents, tools, configuration, and diagnostics.
-- Ratatui/Crossterm interactive terminal shell.
-- Unit, persistence, security, and process-level CLI integration tests.
-- Cross-platform CI, security auditing, release packaging, and architecture documentation.
+Provider credentials are never committed or persisted by the runtime. The interactive TUI currently provides bounded offline planning and session journaling; generalized live provider streaming and broader autonomous tool execution remain subsequent backend milestones.
