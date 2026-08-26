@@ -4,6 +4,9 @@
 
 ### Added
 
+- Premium UTHY startup experience with upper-left layered logo depth, gold-to-amber-to-coral ANSI gradient, responsive Unicode/ASCII fallbacks, numbered onboarding tips, and an outside-project warning card.
+- Minimal initial chat surface with cyan composer focus and compact telemetry.
+
 - Full-viewport Ratatui workspace with dominant chat, responsive navigation, tabbed inspector, live task timeline, tool cards, dedicated composer, contextual keyboard hints, and tiny-terminal fallback.
 - Instant startup banner with large UTHY block lettering, ANSI themes, Unicode/ASCII fallback, compact narrow-terminal mode, version display, and opt-in type-in animation.
 - Native Rust workspace with core, storage, security, and CLI crates.

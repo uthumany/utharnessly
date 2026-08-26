@@ -36,8 +36,16 @@ pub struct BannerTheme {
 impl Default for BannerTheme {
     fn default() -> Self {
         Self {
-            wordmark: Color::Green,
-            subtitle: Color::DarkGrey,
+            wordmark: Color::Rgb {
+                r: 255,
+                g: 196,
+                b: 58,
+            },
+            subtitle: Color::Rgb {
+                r: 255,
+                g: 157,
+                b: 153,
+            },
             version: Color::Grey,
         }
     }
@@ -51,13 +59,13 @@ impl BannerTheme {
             .as_str()
         {
             "midnight-cyan" => Self {
-                wordmark: Color::Blue,
-                subtitle: Color::DarkGrey,
+                wordmark: Color::Cyan,
+                subtitle: Color::Blue,
                 version: Color::Grey,
             },
             "ember" => Self {
-                wordmark: Color::Red,
-                subtitle: Color::DarkGrey,
+                wordmark: Color::Yellow,
+                subtitle: Color::Red,
                 version: Color::Grey,
             },
             "mono-black" => Self {
@@ -124,18 +132,18 @@ pub fn animation_enabled() -> bool {
 pub fn render_banner(width: u16, version: &str, ansi: bool) -> String {
     let mode = mode_for_width(width);
     let theme = BannerTheme::from_environment();
-    let mut lines = Vec::new();
+    let mut lines: Vec<(String, Color)> = Vec::new();
     match mode {
         BannerMode::Compact => {
-            lines.push("UTHY".to_string());
-            lines.push("AGENT TERMINAL".to_string());
-            lines.push(format!("v{version}"));
+            lines.push(("UTHY".into(), theme.wordmark));
+            lines.push(("AGENT TERMINAL".into(), theme.subtitle));
+            lines.push((format!("v{version}"), theme.version));
         }
         BannerMode::Unicode | BannerMode::Ascii => {
             let art: Vec<String> = if mode == BannerMode::Unicode {
                 UNICODE_BANNER
                     .iter()
-                    .map(|line| (*line).to_string())
+                    .map(|line| format!("{line}░"))
                     .collect()
             } else {
                 ASCII_BANNER
@@ -143,79 +151,89 @@ pub fn render_banner(width: u16, version: &str, ansi: bool) -> String {
                     .map(|line| (*line).to_string())
                     .collect()
             };
-            lines.extend(art);
-            lines.push("              U T H Y".to_string());
-            lines.push("            AGENT TERMINAL".to_string());
-            lines.push(format!("                 v{version}"));
+            let art_len = art.len();
+            for (index, line) in art.into_iter().enumerate() {
+                lines.push((line, gradient_color(index, art_len)));
+            }
+            if mode == BannerMode::Unicode {
+                lines.push((
+                    "  ───────────────────────────────────────░░".into(),
+                    Color::Rgb {
+                        r: 226,
+                        g: 119,
+                        b: 128,
+                    },
+                ));
+            }
+            lines.push(("      U T H Y".into(), theme.wordmark));
+            lines.push(("    AGENT TERMINAL".into(), theme.subtitle));
+            lines.push((format!("         v{version}"), theme.version));
         }
     }
+
     let max_width = lines
         .iter()
-        .map(|line| line.chars().count())
+        .map(|(line, _)| line.chars().count())
         .max()
         .unwrap_or(0);
+    let left_pad = if width as usize > max_width + 12 {
+        4
+    } else {
+        2
+    };
     let mut out = String::new();
-    for (index, line) in lines.iter().enumerate() {
-        let pad = " ".repeat((width as usize).saturating_sub(max_width) / 2);
-        let color = match mode {
-            BannerMode::Compact if index == 0 => theme.wordmark,
-            BannerMode::Compact if index == 1 => theme.subtitle,
-            BannerMode::Compact => theme.version,
-            BannerMode::Unicode | BannerMode::Ascii if index < 6 => gradient_color(index),
-            _ if index == 6 => theme.wordmark,
-            _ if index == 7 => theme.subtitle,
-            _ => theme.version,
-        };
+    for (line, color) in lines {
+        let pad = " ".repeat(left_pad);
         if ansi {
             out.push_str(&format!(
-                "{}{}{}{}\n",
+                "{}{color}{line}{}\n",
                 pad,
-                ansi_code(color),
-                line,
-                ansi_reset()
+                ansi_reset(),
+                color = ansi_code(color)
             ));
         } else {
             out.push_str(&pad);
-            out.push_str(line);
+            out.push_str(&line);
             out.push('\n');
         }
     }
     out
 }
 
-fn gradient_color(index: usize) -> Color {
-    match index {
-        0 => Color::Rgb {
+fn gradient_color(index: usize, count: usize) -> Color {
+    let palette = [
+        Color::Rgb {
             r: 255,
             g: 222,
             b: 72,
         },
-        1 => Color::Rgb {
+        Color::Rgb {
             r: 255,
             g: 196,
             b: 58,
         },
-        2 => Color::Rgb {
+        Color::Rgb {
             r: 255,
             g: 164,
             b: 67,
         },
-        3 => Color::Rgb {
+        Color::Rgb {
             r: 255,
             g: 137,
             b: 101,
         },
-        4 => Color::Rgb {
+        Color::Rgb {
             r: 255,
             g: 157,
             b: 153,
         },
-        _ => Color::Rgb {
+        Color::Rgb {
             r: 247,
             g: 190,
             b: 202,
         },
-    }
+    ];
+    palette[index.min(count.saturating_sub(1)).min(palette.len() - 1)]
 }
 
 fn ansi_code(color: Color) -> String {
@@ -252,8 +270,20 @@ pub fn print_onboarding_tips() -> anyhow::Result<()> {
         String::new()
     };
     let reset = if ansi { ansi_reset() } else { "" };
-    writeln!(stdout, "  {cyan}Tip{reset}  Start with a clear task or add {muted}@file  @folder  @agent  @skill  @memory{reset}")?;
-    writeln!(stdout, "  {cyan}Tip{reset}  Press {muted}Ctrl+K{reset} for commands · {muted}Enter{reset} sends · {muted}Shift+Enter{reset} adds a line")?;
+    writeln!(stdout, "  {cyan}Tips for getting started:{reset}")?;
+    writeln!(
+        stdout,
+        "  {muted}1. Ask questions, edit files, or execute commands.{reset}"
+    )?;
+    writeln!(
+        stdout,
+        "  {muted}2. Use @file to attach project context.{reset}"
+    )?;
+    writeln!(
+        stdout,
+        "  {muted}3. Create UTHARNESS.md to define project instructions.{reset}"
+    )?;
+    writeln!(stdout, "  {muted}4. Use /help to explore commands.{reset}")?;
     stdout.flush()?;
     if ansi && std::env::var_os("UTHARNESS_REDUCED_MOTION").is_none() {
         let delay = std::env::var("UTHARNESS_STARTUP_SPLASH_MS")
@@ -273,12 +303,9 @@ pub fn print_startup_banner(version: &str) -> anyhow::Result<()> {
     let mut stdout = io::stdout();
     if ansi && animation_enabled() && width >= 42 {
         for line in rendered.lines() {
-            for ch in line.chars() {
-                write!(stdout, "{ch}")?;
-                stdout.flush()?;
-                thread::sleep(Duration::from_millis(3));
-            }
-            writeln!(stdout)?;
+            writeln!(stdout, "{line}")?;
+            stdout.flush()?;
+            thread::sleep(Duration::from_millis(12));
         }
     } else {
         write!(stdout, "{rendered}")?;
@@ -301,6 +328,8 @@ mod tests {
         assert!(output.contains("U T H Y"));
         assert!(output.contains("AGENT TERMINAL"));
         assert!(output.contains("v0.1.0"));
+        assert!(output.contains("░"));
+        assert!(output.starts_with("    "));
     }
 
     #[test]
@@ -319,9 +348,10 @@ mod tests {
     }
 
     #[test]
-    fn ansi_output_contains_color_sequences() {
+    fn ansi_output_contains_gradient_color_sequences() {
         let output = render_banner(120, "0.1.0", true);
-        assert!(output.contains("\u{1b}["));
+        assert!(output.contains("\u{1b}[38;2;255;222;72m"));
+        assert!(output.contains("\u{1b}[38;2;247;190;202m"));
         assert!(output.contains("\u{1b}[0m"));
     }
 }

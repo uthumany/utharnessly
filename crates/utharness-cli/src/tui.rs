@@ -250,14 +250,20 @@ fn render_chat(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
         )));
     }
 
-    let attention = provider_needs_setup() && !state.attention_dismissed;
-    if attention {
+    let outside_project = !is_project_workspace();
+    let attention = !state.attention_dismissed;
+    if attention && (outside_project || provider_needs_setup()) {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "╭─ PROJECT SETUP ─────────────────────────────────────────────────────────╮",
             Style::default().fg(YELLOW),
         )));
-        lines.push(Line::from(Span::styled("│ Offline Planner is active. Configure an API provider to enable model-backed execution. │", Style::default().fg(SOFT))));
+        let warning = if outside_project {
+            "│ You are running Utharness outside a project workspace. Open a project directory for repository-aware agent features. │"
+        } else {
+            "│ Offline Planner is active. Configure an API provider to enable model-backed execution. │"
+        };
+        lines.push(Line::from(Span::styled(warning, Style::default().fg(SOFT))));
         lines.push(Line::from(Span::styled(
             "╰─────────────────────────────────────────────────────────────────────────╯",
             Style::default().fg(YELLOW),
@@ -468,6 +474,18 @@ fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(vertical[1])[1]
+}
+
+fn is_project_workspace() -> bool {
+    let Ok(path) = std::env::current_dir() else {
+        return false;
+    };
+    Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(path)
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
 }
 
 fn provider_needs_setup() -> bool {
