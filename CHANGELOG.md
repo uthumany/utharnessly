@@ -4,6 +4,9 @@
 
 ### Added
 
+- Focus Mode as the default terminal experience: conversation-first history, inline activity cards, keyboard-triggered overlays, fixed cyan composer, compact telemetry, and optional Workspace Mode via Ctrl+B.
+- Overlay routes for command palette, model picker, file picker, agent manager, task inspector, memory, logs, and help.
+
 - Premium UTHY startup experience with upper-left layered logo depth, gold-to-amber-to-coral ANSI gradient, responsive Unicode/ASCII fallbacks, numbered onboarding tips, and an outside-project warning card.
 - Minimal initial chat surface with cyan composer focus and compact telemetry.
 

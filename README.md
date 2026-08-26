@@ -95,11 +95,13 @@ The next backend milestones are provider adapters and streaming, task-graph pers
 
 ## TUI workspace
 
-The native TUI uses a minimal, Qwen-inspired chat-first composition rather than permanent sidebars. The startup flow keeps the large UTHY banner, renders a yellow-to-orange-to-soft-pink ANSI gradient when color is available, and places concise onboarding tips directly below it. The persistent workspace then becomes a spacious conversation surface with intentional empty space, a single project-attention card when provider setup is missing, a wide cyan-bordered message composer, and a compact telemetry footer.
+Focus Mode is now the default native TUI. It contains only the UTHY identity/header, conversation history, active task or warning cards, the fixed message composer, and the bottom status bar. Navigation, model selection, files, agents, tasks, memory, and logs are available as keyboard-triggered overlays instead of permanent panels. `Ctrl+B` toggles the original multi-pane layout as optional Workspace Mode.
 
-The composer placeholder is `Type your message or @path/to/file`. It supports multiline input with `Shift+Enter`, `Enter` to send, and context references for `@file`, `@folder`, `@agent`, `@skill`, and `@memory`. While typing an `@` reference, a suggestions strip appears with matching workspace context targets. Navigation is available through `Ctrl+K` instead of permanently consuming viewport width; the palette exposes Chat, Tasks, Files, Agents, and Memory. `Ctrl+L` clears the composer, `Tab` moves between chat and composer, and `Ctrl+C` exits. Narrow terminals collapse the layout into a single chat surface while preserving the composer and essential footer controls.
+Conversation history renders agent activity inline. Completed PLAN, SHELL, FILE, EDIT, DIFF, GIT, BROWSER, AGENT, MEMORY, SKILL, MCP, TEST, ERROR, and permission cards stay compact; the active operation expands with a marker, progress, and details. The message composer remains the strongest interactive element with a cyan focus border, placeholder `Type your message or @path/to/file`, multiline `Shift+Enter`, `Enter` to send, and context references for `@file`, `@folder`, `@agent`, `@skill`, and `@memory`.
 
-Telemetry shows the current workspace, permission mode, provider, model, Git branch, and remaining context. Semantic colors remain restrained: cyan marks focus, yellow marks warnings and tips, green marks success, red is reserved for errors, purple identifies agents, blue identifies tools, and gray carries secondary information.
+The Focus Mode shortcut map is `Ctrl+K` command palette, `Ctrl+P` model picker, `Ctrl+O` file picker, `Ctrl+G` agent manager, `Ctrl+T` task inspector, `Ctrl+M` memory, `Ctrl+L` logs, `Ctrl+B` Workspace Mode, and `F1` help. `Tab` moves between chat and composer, `PageUp`/`PageDown` and arrow keys scroll conversation history, `Esc` closes overlays, and `Ctrl+C` exits. The bottom status bar shows workspace, permission mode, provider/model, Git branch, and context remaining. Narrow terminals collapse to a single chat surface while preserving the composer and essential status controls.
+
+Semantic colors remain restrained: cyan marks focus, yellow marks warnings and progress, green marks success, red marks errors, purple marks agents, blue marks tools, and gray carries secondary information.
 
 ## Startup banner
 

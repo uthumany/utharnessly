@@ -9,7 +9,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
     Frame, Terminal,
 };
 use std::{io, process::Command, time::Duration};
@@ -29,13 +29,42 @@ enum Focus {
     Composer,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Overlay {
+    Commands,
+    Model,
+    Files,
+    Agents,
+    Tasks,
+    Memory,
+    Logs,
+    Help,
+}
+
+impl Overlay {
+    fn title(self) -> &'static str {
+        match self {
+            Self::Commands => "COMMAND PALETTE",
+            Self::Model => "MODEL PICKER",
+            Self::Files => "FILE PICKER",
+            Self::Agents => "AGENT MANAGER",
+            Self::Tasks => "TASK INSPECTOR",
+            Self::Memory => "PROJECT MEMORY",
+            Self::Logs => "RUNTIME LOGS",
+            Self::Help => "KEYBOARD HELP",
+        }
+    }
+}
+
 #[derive(Debug)]
 struct TuiState {
     focus: Focus,
     draft: String,
     sent_count: usize,
     status: String,
-    palette_open: bool,
+    overlay: Option<Overlay>,
+    workspace_mode: bool,
+    history_scroll: u16,
     attention_dismissed: bool,
 }
 
@@ -45,8 +74,10 @@ impl Default for TuiState {
             focus: Focus::Composer,
             draft: String::new(),
             sent_count: 0,
-            status: "Ready · offline planner".into(),
-            palette_open: false,
+            status: "Ready · Focus Mode".into(),
+            overlay: None,
+            workspace_mode: false,
+            history_scroll: 0,
             attention_dismissed: false,
         }
     }
@@ -57,53 +88,61 @@ impl TuiState {
         if key.modifiers.contains(KeyModifiers::CONTROL) {
             match key.code {
                 KeyCode::Char('c') => return true,
-                KeyCode::Char('k') => {
-                    self.palette_open = !self.palette_open;
-                    self.status = if self.palette_open {
-                        "Command palette open".into()
-                    } else {
-                        "Command palette closed".into()
-                    };
-                }
+                KeyCode::Char('k') => self.toggle_overlay(Overlay::Commands),
+                KeyCode::Char('p') => self.toggle_overlay(Overlay::Model),
+                KeyCode::Char('o') => self.toggle_overlay(Overlay::Files),
+                KeyCode::Char('g') => self.toggle_overlay(Overlay::Agents),
+                KeyCode::Char('t') => self.toggle_overlay(Overlay::Tasks),
+                KeyCode::Char('m') => self.toggle_overlay(Overlay::Memory),
+                KeyCode::Char('l') => self.toggle_overlay(Overlay::Logs),
                 KeyCode::Char('b') => {
-                    self.status = "Navigation is available from Ctrl+K".into();
-                    self.palette_open = true;
-                }
-                KeyCode::Char('l') => {
-                    self.draft.clear();
-                    self.status = "Composer cleared".into();
+                    self.workspace_mode = !self.workspace_mode;
+                    self.overlay = None;
+                    self.status = if self.workspace_mode {
+                        "Workspace Mode enabled · Ctrl+B to return to Focus Mode".into()
+                    } else {
+                        "Focus Mode enabled · conversation is primary".into()
+                    };
                 }
                 _ => {}
             }
             return false;
         }
 
-        if self.palette_open {
+        if key.code == KeyCode::F(1) {
+            self.toggle_overlay(Overlay::Help);
+            return false;
+        }
+
+        if let Some(overlay) = self.overlay {
             match key.code {
-                KeyCode::Esc | KeyCode::Char('q') => self.palette_open = false,
-                KeyCode::Char('1') => self.status = "Chat selected".into(),
-                KeyCode::Char('2') => self.status = "Tasks selected".into(),
-                KeyCode::Char('3') => self.status = "Files selected".into(),
-                KeyCode::Char('4') => self.status = "Agents selected".into(),
-                KeyCode::Char('5') => self.status = "Memory selected".into(),
-                _ => {}
+                KeyCode::Esc | KeyCode::Char('q') => self.overlay = None,
+                KeyCode::Char('1') => self.toggle_overlay(Overlay::Commands),
+                KeyCode::Char('2') => self.toggle_overlay(Overlay::Model),
+                KeyCode::Char('3') => self.toggle_overlay(Overlay::Files),
+                KeyCode::Char('4') => self.toggle_overlay(Overlay::Agents),
+                KeyCode::Char('5') => self.toggle_overlay(Overlay::Tasks),
+                KeyCode::Char('6') => self.toggle_overlay(Overlay::Memory),
+                _ => self.status = format!("{} open · Esc closes", overlay.title()),
             }
             return false;
         }
 
         match key.code {
-            KeyCode::Tab => {
+            KeyCode::Tab | KeyCode::BackTab => {
                 self.focus = match self.focus {
                     Focus::Chat => Focus::Composer,
                     Focus::Composer => Focus::Chat,
                 }
             }
-            KeyCode::BackTab => {
-                self.focus = match self.focus {
-                    Focus::Chat => Focus::Composer,
-                    Focus::Composer => Focus::Chat,
-                }
+            KeyCode::Up if self.focus == Focus::Chat => {
+                self.history_scroll = self.history_scroll.saturating_add(1);
             }
+            KeyCode::Down if self.focus == Focus::Chat => {
+                self.history_scroll = self.history_scroll.saturating_sub(1);
+            }
+            KeyCode::PageUp => self.history_scroll = self.history_scroll.saturating_add(6),
+            KeyCode::PageDown => self.history_scroll = self.history_scroll.saturating_sub(6),
             KeyCode::Char(c) if self.focus == Focus::Composer => self.draft.push(c),
             KeyCode::Backspace if self.focus == Focus::Composer => {
                 self.draft.pop();
@@ -113,8 +152,9 @@ impl TuiState {
                     self.draft.push('\n');
                 } else if !self.draft.trim().is_empty() {
                     self.sent_count += 1;
-                    self.status = format!("Message {} sent · planning", self.sent_count);
+                    self.status = format!("Message {} sent · plan queued", self.sent_count);
                     self.draft.clear();
+                    self.history_scroll = 0;
                 }
             }
             KeyCode::Esc => {
@@ -124,6 +164,18 @@ impl TuiState {
             _ => {}
         }
         false
+    }
+
+    fn toggle_overlay(&mut self, overlay: Overlay) {
+        self.overlay = if self.overlay == Some(overlay) {
+            None
+        } else {
+            Some(overlay)
+        };
+        self.status = self
+            .overlay
+            .map(|item| format!("{} open", item.title()))
+            .unwrap_or_else(|| "Overlay closed".into());
     }
 
     fn reference_prefix(&self) -> Option<&str> {
@@ -166,12 +218,17 @@ fn render(frame: &mut Frame<'_>, state: &TuiState) {
     frame.render_widget(Block::default().style(Style::default().bg(SURFACE)), area);
     if area.width < 64 || area.height < 16 {
         render_narrow(frame, area, state);
-        if state.palette_open {
-            render_palette(frame, area);
-        }
-        return;
+    } else if state.workspace_mode {
+        render_workspace(frame, area, state);
+    } else {
+        render_focus(frame, area, state);
     }
+    if let Some(overlay) = state.overlay {
+        render_overlay(frame, area, overlay);
+    }
+}
 
+fn render_focus(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
     let sections = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -191,9 +248,66 @@ fn render(frame: &mut Frame<'_>, state: &TuiState) {
     render_composer(frame, sections[2], state);
     render_telemetry(frame, sections[3]);
     render_footer(frame, sections[4], state);
-    if state.palette_open {
-        render_palette(frame, area);
-    }
+}
+
+fn render_workspace(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
+    let sections = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Min(6),
+            Constraint::Length(2),
+            Constraint::Length(1),
+        ])
+        .split(area);
+    render_header(frame, sections[0], area.width);
+    let panes = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(18),
+            Constraint::Percentage(57),
+            Constraint::Percentage(25),
+        ])
+        .split(sections[1]);
+    let navigation = [
+        "◆ Chat",
+        "✓ Tasks   3",
+        "▤ Files",
+        "◉ Agents",
+        "✦ Skills",
+        "◫ Memory",
+        "◷ Jobs",
+        "◇ Models",
+        "≡ Logs",
+    ];
+    frame.render_widget(
+        List::new(
+            navigation
+                .iter()
+                .map(|item| ListItem::new(*item))
+                .collect::<Vec<_>>(),
+        )
+        .block(
+            Block::default()
+                .title(" WORKSPACE ")
+                .borders(Borders::RIGHT)
+                .border_style(Style::default().fg(MUTED)),
+        ),
+        panes[0],
+    );
+    render_chat(frame, panes[1], state);
+    let inspector = "TASK\n\n✓ Inspect repository\n✓ Load memory\n● Analyze auth module\n○ Edit files\n○ Run tests\n\nTOOLS\n\n◆ git_status   completed\n○ shell         waiting\n\nCtrl+T Inspector";
+    frame.render_widget(
+        Paragraph::new(inspector).wrap(Wrap { trim: true }).block(
+            Block::default()
+                .title(" INSPECTOR ")
+                .borders(Borders::LEFT)
+                .border_style(Style::default().fg(MUTED)),
+        ),
+        panes[2],
+    );
+    render_telemetry(frame, sections[2]);
+    render_footer(frame, sections[3], state);
 }
 
 fn render_header(frame: &mut Frame<'_>, area: Rect, width: u16) {
@@ -204,7 +318,6 @@ fn render_header(frame: &mut Frame<'_>, area: Rect, width: u16) {
         "OpenRouter"
     };
     let branch = git_branch();
-    let path = current_workspace();
     let mut spans = vec![
         Span::styled(
             "UTHY",
@@ -224,7 +337,7 @@ fn render_header(frame: &mut Frame<'_>, area: Rect, width: u16) {
     if width >= 96 {
         spans.extend([
             Span::styled("  │  ", Style::default().fg(MUTED)),
-            Span::styled(path, Style::default().fg(BLUE)),
+            Span::styled(current_workspace(), Style::default().fg(BLUE)),
             Span::styled("  │  ", Style::default().fg(MUTED)),
             Span::styled("112.6K remaining", Style::default().fg(SOFT)),
         ]);
@@ -233,15 +346,7 @@ fn render_header(frame: &mut Frame<'_>, area: Rect, width: u16) {
 }
 
 fn render_chat(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
-    let mut lines = vec![
-        Line::from(Span::styled("UTHARNESS", Style::default().fg(GREEN).add_modifier(Modifier::BOLD))),
-        Line::from("Welcome back. I can inspect this workspace, form a scoped plan, and ask before making changes."),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("Tip  ", Style::default().fg(YELLOW).add_modifier(Modifier::BOLD)),
-            Span::styled("Start with a clear task. Use @file, @folder, @agent, @skill, or @memory to add context.", Style::default().fg(SOFT)),
-        ]),
-    ];
+    let mut lines = conversation_lines(state);
     if !state.status.starts_with("Ready") {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
@@ -249,44 +354,145 @@ fn render_chat(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
             Style::default().fg(YELLOW),
         )));
     }
-
-    let outside_project = !is_project_workspace();
-    let attention = !state.attention_dismissed;
-    if attention && (outside_project || provider_needs_setup()) {
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            "╭─ PROJECT SETUP ─────────────────────────────────────────────────────────╮",
-            Style::default().fg(YELLOW),
-        )));
-        let warning = if outside_project {
-            "│ You are running Utharness outside a project workspace. Open a project directory for repository-aware agent features. │"
-        } else {
-            "│ Offline Planner is active. Configure an API provider to enable model-backed execution. │"
-        };
-        lines.push(Line::from(Span::styled(warning, Style::default().fg(SOFT))));
-        lines.push(Line::from(Span::styled(
-            "╰─────────────────────────────────────────────────────────────────────────╯",
-            Style::default().fg(YELLOW),
-        )));
-    }
-
-    let title = if state.focus == Focus::Chat {
-        "CHAT · FOCUSED"
-    } else {
-        "CHAT"
-    };
     frame.render_widget(
-        Paragraph::new(lines).wrap(Wrap { trim: true }).block(
-            Block::default()
-                .title(title)
-                .title_style(Style::default().fg(if state.focus == Focus::Chat {
-                    CYAN
-                } else {
-                    MUTED
-                })),
-        ),
+        Paragraph::new(lines)
+            .wrap(Wrap { trim: false })
+            .scroll((state.history_scroll, 0))
+            .block(
+                Block::default()
+                    .title(if state.focus == Focus::Chat {
+                        " CHAT · FOCUSED "
+                    } else {
+                        " CHAT "
+                    })
+                    .title_style(Style::default().fg(if state.focus == Focus::Chat {
+                        CYAN
+                    } else {
+                        MUTED
+                    })),
+            ),
         area,
     );
+}
+
+fn conversation_lines(state: &TuiState) -> Vec<Line<'static>> {
+    let mut lines = vec![
+        Line::from(Span::styled(
+            "YOU",
+            Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
+        )),
+        Line::from("Fix the authentication tests and run the complete suite."),
+        Line::from(""),
+        Line::from(Span::styled(
+            "UTHARNESS",
+            Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+        )),
+        Line::from("I will inspect the repository, read the auth module, and ask before edits."),
+        Line::from(""),
+    ];
+    lines.extend(inline_card(
+        "PLAN",
+        "Fix authentication tests",
+        "Inspect → read → edit → test",
+        YELLOW,
+        false,
+    ));
+    lines.extend(inline_card(
+        "FILE",
+        "src/auth/session.rs",
+        "128 lines · read-only",
+        BLUE,
+        false,
+    ));
+    lines.extend(inline_card(
+        "EDIT",
+        "src/auth/session.rs",
+        "+12  -4   View diff",
+        YELLOW,
+        true,
+    ));
+    lines.extend(inline_card(
+        "TEST",
+        "Running complete suite",
+        "████████████████░░░░ 80%",
+        GREEN,
+        true,
+    ));
+    lines.push(Line::from(Span::styled(
+        "218 passed   2 running   0 failed",
+        Style::default().fg(GREEN),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "INLINE ACTIVITY",
+        Style::default().fg(PURPLE).add_modifier(Modifier::BOLD),
+    )));
+    for (kind, title, detail, color, active) in [
+        ("SHELL", "cargo test", "permission required", BLUE, false),
+        (
+            "DIFF",
+            "auth/session.rs",
+            "+12  -4 · View diff",
+            YELLOW,
+            false,
+        ),
+        ("GIT", "main", "2 files changed", PURPLE, false),
+        ("BROWSER", "docs.rs", "waiting", BLUE, false),
+        ("AGENT", "Tester", "running suite", PURPLE, true),
+        ("MEMORY", "project notes", "2 matches", CYAN, false),
+        ("SKILL", "debugger", "loaded", PURPLE, false),
+        ("MCP", "filesystem", "connected", BLUE, false),
+        ("ERROR", "none", "0 failed", GREEN, false),
+    ] {
+        lines.extend(inline_card(kind, title, detail, color, active));
+    }
+    if state.sent_count > 0 {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            format!("Message {} queued for the agent runtime.", state.sent_count),
+            Style::default().fg(CYAN),
+        )));
+    }
+    if !is_project_workspace() && !state.attention_dismissed {
+        lines.push(Line::from(""));
+        lines.extend(inline_card(
+            "WARNING",
+            "Project workspace required",
+            "Open a Git project for repository-aware features",
+            YELLOW,
+            true,
+        ));
+    }
+    lines
+}
+
+fn inline_card(
+    kind: &str,
+    title: &str,
+    detail: &str,
+    color: Color,
+    active: bool,
+) -> Vec<Line<'static>> {
+    let marker = if active { "◆" } else { "✓" };
+    let mut lines = vec![Line::from(vec![
+        Span::styled(
+            format!("{marker} {kind} "),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(title.to_string(), Style::default().fg(SOFT)),
+    ])];
+    if active {
+        lines.push(Line::from(Span::styled(
+            format!("   {detail}"),
+            Style::default().fg(color),
+        )));
+    } else {
+        lines[0].spans.push(Span::styled(
+            format!("  · {detail}"),
+            Style::default().fg(MUTED),
+        ));
+    }
+    lines
 }
 
 fn render_composer(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
@@ -309,14 +515,13 @@ fn render_composer(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
     } else {
         state.draft.clone()
     };
-    let style = if state.focus == Focus::Composer {
-        Style::default().fg(Color::White)
-    } else {
-        Style::default().fg(MUTED)
-    };
     frame.render_widget(
         Paragraph::new(input)
-            .style(style)
+            .style(Style::default().fg(if state.focus == Focus::Composer {
+                Color::White
+            } else {
+                MUTED
+            }))
             .wrap(Wrap { trim: false })
             .block(
                 Block::default()
@@ -328,9 +533,8 @@ fn render_composer(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
         sections[0],
     );
     if let Some(prefix) = state.reference_prefix() {
-        let suggestions = reference_suggestions(prefix);
         frame.render_widget(
-            Paragraph::new(suggestions)
+            Paragraph::new(reference_suggestions(prefix))
                 .style(Style::default().fg(BLUE))
                 .block(
                     Block::default()
@@ -341,18 +545,14 @@ fn render_composer(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
             sections[1],
         );
         frame.render_widget(
-            Paragraph::new(
-                " Enter Send   Shift+Enter New line   @ References   Ctrl+K Commands   Ctrl+L Clear",
-            )
-            .style(Style::default().fg(MUTED)),
+            Paragraph::new(" Enter Send   Shift+Enter New line   @ Context   Ctrl+K Commands")
+                .style(Style::default().fg(MUTED)),
             sections[2],
         );
     } else {
         frame.render_widget(
-            Paragraph::new(
-                " Enter Send   Shift+Enter New line   @ References   Ctrl+K Commands   Ctrl+L Clear",
-            )
-            .style(Style::default().fg(MUTED)),
+            Paragraph::new(" Enter Send   Shift+Enter New line   @ Context   Ctrl+K Commands")
+                .style(Style::default().fg(MUTED)),
             sections[1],
         );
     }
@@ -365,18 +565,20 @@ fn render_telemetry(frame: &mut Frame<'_>, area: Rect) {
     } else {
         "OpenRouter"
     };
-    let telemetry = format!("workspace {}  │  permission SAFE  │  provider {}  │  model {}  │  branch {}  │  context 112.6K remaining", current_workspace(), provider, model, git_branch());
-    frame.render_widget(
-        Paragraph::new(telemetry).style(Style::default().fg(MUTED)),
-        area,
+    let text = format!(
+        "workspace {}  │  SAFE MODE  │  {}/{}  │  context 112.6K remaining",
+        current_workspace(),
+        provider,
+        model
     );
+    frame.render_widget(Paragraph::new(text).style(Style::default().fg(MUTED)), area);
 }
 
 fn render_footer(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
-    let text = if state.focus == Focus::Composer {
-        "Tab Focus chat   Ctrl+K Command palette   Ctrl+L Clear   F1 Help   Ctrl+C Exit"
+    let text = if state.workspace_mode {
+        "Ctrl+B Focus Mode   Ctrl+K Commands   Ctrl+T Tasks   F1 Help   Ctrl+C Exit"
     } else {
-        "Tab Focus composer   Ctrl+K Command palette   Ctrl+C Exit"
+        "Ctrl+K Commands   Ctrl+P Model   Ctrl+O Files   Ctrl+G Agents   Ctrl+T Tasks   Ctrl+M Memory   Ctrl+L Logs   Ctrl+B Workspace   F1 Help"
     };
     frame.render_widget(Paragraph::new(text).style(Style::default().fg(MUTED)), area);
 }
@@ -401,7 +603,13 @@ fn render_narrow(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
         ])),
         sections[0],
     );
-    frame.render_widget(Paragraph::new("UTHARNESS\n\nWelcome back. Start with a task or add @context.\n\nOffline Planner ready.").wrap(Wrap { trim: true }), sections[1]);
+    frame.render_widget(
+        Paragraph::new(
+            "CHAT\n\nUTHARNESS ready. Use Ctrl+K for commands.\n\n◆ TEST  80% · 218 passed",
+        )
+        .wrap(Wrap { trim: true }),
+        sections[1],
+    );
     let draft = if state.draft.is_empty() {
         "Type your message or @path/to/file"
     } else {
@@ -422,16 +630,26 @@ fn render_narrow(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
     );
 }
 
-fn render_palette(frame: &mut Frame<'_>, area: Rect) {
-    let popup = centered_rect(64, 58, area);
-    let items = "COMMAND PALETTE\n\n1  Chat                 Open conversation\n2  Tasks                Inspect execution\n3  Files                Browse workspace\n4  Agents               Manage agents\n5  Memory               Search project memory\n\nCtrl+P  Model   Ctrl+O  Files   Ctrl+G  Agents\nEsc     Close";
+fn render_overlay(frame: &mut Frame<'_>, area: Rect, overlay: Overlay) {
+    let popup = centered_rect(68, 62, area);
+    let body = match overlay {
+        Overlay::Commands => "1  Chat       2  Model       3  Files\n4  Agents     5  Tasks       6  Memory\n\nCtrl+L  Logs        Ctrl+B  Workspace Mode\nF1      Help        Esc      Close",
+        Overlay::Model => "MODEL PICKER\n\n● Offline Planner       active · local\n○ OpenRouter / Qwen3-Coder\n○ OpenAI-compatible provider\n\nEnter select · Esc close",
+        Overlay::Files => "FILE PICKER\n\n▸ src/\n  ├─ auth/session.rs\n  ├─ auth/token.rs\n  └─ runtime.rs\n▸ tests/\n  └─ auth_test.rs\n\nType to filter · Enter attach",
+        Overlay::Agents => "AGENT MANAGER\n\n● Lead       planning\n● Coder      waiting for approval\n◐ Tester     running suite\n○ Reviewer   idle\n\nEnter inspect · Esc close",
+        Overlay::Tasks => "TASK INSPECTOR\n\n✓ Inspect repository\n✓ Load project memory\n● Analyze auth module\n○ Edit implementation\n○ Run tests\n○ Review diff\n\nCtrl+T toggles this view",
+        Overlay::Memory => "PROJECT MEMORY\n\n2 indexed records\n· SAFE shell policy\n· Authentication test conventions\n\nType to search · Enter attach",
+        Overlay::Logs => "RUNTIME LOGS\n\n[info] session ready\n[info] tool policy SAFE\n[ok] SQLite event journal healthy\n[wait] no active provider stream",
+        Overlay::Help => "KEYBOARD HELP\n\nEnter       Send message\nShift+Enter New line\nCtrl+K      Command palette\nCtrl+P/O/G/T/M/L  Context overlays\nCtrl+B      Workspace Mode\nTab         Focus chat/composer\nCtrl+C      Exit",
+    };
     frame.render_widget(Clear, popup);
     frame.render_widget(
-        Paragraph::new(items)
+        Paragraph::new(body)
             .style(Style::default().fg(SOFT))
+            .wrap(Wrap { trim: false })
             .block(
                 Block::default()
-                    .title(" COMMANDS ")
+                    .title(format!(" {} ", overlay.title()))
                     .title_style(Style::default().fg(CYAN))
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(CYAN)),
@@ -441,20 +659,19 @@ fn render_palette(frame: &mut Frame<'_>, area: Rect) {
 }
 
 fn reference_suggestions(prefix: &str) -> String {
-    let options = [
+    [
         "file   src/main.rs",
         "folder src/",
         "agent @tester",
         "skill @debugger",
         "memory project notes",
-    ];
-    options
-        .iter()
-        .filter(|item| prefix.is_empty() || item.contains(prefix))
-        .take(4)
-        .copied()
-        .collect::<Vec<_>>()
-        .join("   ·   ")
+    ]
+    .iter()
+    .filter(|item| prefix.is_empty() || item.contains(prefix))
+    .take(4)
+    .copied()
+    .collect::<Vec<_>>()
+    .join("   ·   ")
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
@@ -486,12 +703,6 @@ fn is_project_workspace() -> bool {
         .output()
         .map(|output| output.status.success())
         .unwrap_or(false)
-}
-
-fn provider_needs_setup() -> bool {
-    std::env::var_os("OPENROUTER_API_KEY").is_none()
-        && std::env::var_os("OPENAI_API_KEY").is_none()
-        && std::env::var_os("UTHARNESS_PROVIDER_URL").is_none()
 }
 
 fn current_workspace() -> String {
@@ -542,14 +753,28 @@ mod tests {
     }
 
     #[test]
-    fn ctrl_k_opens_command_palette_without_stealing_input() {
+    fn focus_shortcuts_open_context_overlays() {
         let mut state = TuiState::default();
-        state.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL));
-        assert!(state.palette_open);
-        state.handle_key(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
-        assert!(state.palette_open);
-        state.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-        assert!(!state.palette_open);
+        for (key, expected) in [
+            ('p', Overlay::Model),
+            ('o', Overlay::Files),
+            ('g', Overlay::Agents),
+            ('t', Overlay::Tasks),
+            ('m', Overlay::Memory),
+            ('l', Overlay::Logs),
+        ] {
+            state.handle_key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::CONTROL));
+            assert_eq!(state.overlay, Some(expected));
+        }
+    }
+
+    #[test]
+    fn ctrl_b_toggles_workspace_mode() {
+        let mut state = TuiState::default();
+        state.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL));
+        assert!(state.workspace_mode);
+        state.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL));
+        assert!(!state.workspace_mode);
     }
 
     #[test]
