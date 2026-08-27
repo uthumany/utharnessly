@@ -87,7 +87,7 @@ else
 fi
 
 find "$OUTPUT_DIR" -type f ! -name SHA256SUMS -printf '%P\n' | sort | while read -r relative; do
-  sha256sum "$OUTPUT_DIR/$relative"
+  (cd "$OUTPUT_DIR" && sha256sum "$relative")
 done > "$OUTPUT_DIR/SHA256SUMS"
 mkdir -p "$(dirname "$OUTPUT_DIR")"
 tar -C "$(dirname "$OUTPUT_DIR")" -czf "$(dirname "$OUTPUT_DIR")/utharness-termux-repository-${VERSION}.tar.gz" "$(basename "$OUTPUT_DIR")"
