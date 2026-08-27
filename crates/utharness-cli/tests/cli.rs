@@ -31,6 +31,20 @@ fn run_with_env(
 }
 
 #[test]
+fn cli_version_matches_cargo_package_version() {
+    let output = Command::new(env!("CARGO_BIN_EXE_utharness"))
+        .arg("--version")
+        .output()
+        .expect("run utharness --version");
+    assert!(output.status.success());
+    let reported = String::from_utf8(output.stdout).expect("utf8 version output");
+    assert_eq!(
+        reported.trim(),
+        format!("utharness {}", env!("CARGO_PKG_VERSION"))
+    );
+}
+
+#[test]
 fn skill_commands_cover_registry_lifecycle_and_local_import() {
     let workspace = tempdir().unwrap();
     let home = tempdir().unwrap();

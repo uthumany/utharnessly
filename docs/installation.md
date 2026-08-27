@@ -6,7 +6,7 @@ For the shortest copyable install page, start with [`INSTALLATION.md`](../INSTAL
 
 ## Termux / Android
 
-The native Termux package is built from [`packages/utharness`](../packages/utharness), placed only in Termux’s `$PREFIX`, and distributed through the signed APT repository created by the release workflow. It does not require root. The current existing `v0.1.0` release predates the Termux repository publication, so the bootstrap below becomes live with the first signed Termux-enabled release; until then use the source workflow.
+The native Termux package is built from [`packages/utharness`](../packages/utharness), placed only in Termux’s `$PREFIX`, and distributed through the live signed APT repository published at v0.2.6. It does not require root. The package and metadata are verified from the public Pages endpoints; physical-device and Android-version-specific behavior remains unverified in this Linux-only QA environment.
 
 ```bash
 pkg update
@@ -131,7 +131,7 @@ The Python package is a dependency-free launcher. It uses the same release archi
 | Rush / Lerna / cnpm | **Not required** | Use the repository’s pnpm lockfile and `pnpm --dir ui ...`; do not add an orchestrator solely for compatibility claims. | No Rush/Lerna workspace or cnpm-specific distribution is maintained. |
 | Git | **Supported source path** | `git clone https://github.com/uthumany/utharnessly.git && cd utharnessly` | Requires Rust stable, Node.js 22, and pnpm to build the complete CLI/TUI. |
 | winget | **Prerequisite channel** | `winget install OpenJS.NodeJS.LTS Git.Git` | Installs prerequisites on Windows; no utharnessly winget manifest is published. Use the PowerShell installer or source build afterward. |
-| Termux APT repository | **Prepared; not included in v0.1.0** | `curl -fsSL https://uthumany.github.io/utharnessly/termux/install.sh | bash && pkg install utharness` | Requires a signed Termux repository release; no root. Until that release is published, use source build or SSH to a supported host. |
+| Termux APT repository | **Supported and published; repository verified** | `curl -fsSL https://uthumany.github.io/utharnessly/termux/install.sh | bash && pkg install utharness` | Requires Termux, `curl`, and a network connection; no root. Android device/emulator execution remains to be verified. |
 
 ## Source installation and development
 
@@ -167,7 +167,7 @@ To uninstall the npm launcher, run `npm uninstall --global utharnessly` and remo
 | Linux arm64 | No | No matching archive | Possible if Rust/Node toolchains are available | **Partially supported; source only** |
 | macOS arm64 | No | No matching archive | Possible if Rust/Node toolchains are available | **Partially supported; source only** |
 | Windows arm64 | No | No matching archive | Possible if Rust/Node toolchains are available | **Partially supported; source only** |
-| Android / Termux | No native release archive | No matching archive | Possible but not claimed as native-tested | **Remote/source workflow** |
+| Android / Termux | Yes: signed APT packages | No matching npm/PyPI archive | Possible with Android toolchains | **Package/repository verified; physical-device test pending** |
 | iOS/iPadOS | No | No | No local native claim | **SSH/remote-host workflow** |
 | FreeBSD | No | No | Possible if dependencies are available | **Source/remote workflow** |
 | Other Unix-like systems | No | No | Possible if dependencies are available | **Source/remote workflow** |
@@ -179,7 +179,7 @@ To uninstall the npm launcher, run `npm uninstall --global utharnessly` and remo
 | Windows Terminal, WezTerm, Alacritty, Tabby, Cmder | **Supported rendering class** | Pair with the Windows x64 release or source workflow; Windows-hosted CI validates the CLI build, not every emulator. |
 | Kitty, WezTerm, Alacritty, Ghostty, Tilix on Linux | **Supported rendering class** | Linux PTY screenshots and terminal smoke tests were run on Linux; emulator-specific glyph differences remain possible. |
 | Ghostty, iTerm2, Warp, WezTerm, Kitty on macOS | **Supported rendering class** | Use the macOS x64 release or source workflow; hosted CI validates macOS builds. |
-| Termux | **Partially supported** | Closest Android local shell; source build may work when Rust and Node 22 are available, otherwise use SSH. |
+| Termux | **Supported package path; device validation pending** | Use the signed v0.2.6 repository. Real terminal behavior, Android-version compatibility, and Termux:API execution still require device testing. |
 | Termius, ConnectBot, TermAI, Moshi | **Remote-client workflow** | These are SSH/client environments, not independently tested native build targets. |
 | Blink Shell, Secure ShellFish | **Remote-client workflow** | Connect to a supported Linux/macOS host. |
 | a-Shell, iSH | **Unsupported local native target** | Use SSH or a remote/container host. |

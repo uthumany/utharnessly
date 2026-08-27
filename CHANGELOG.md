@@ -12,9 +12,14 @@ All notable changes to utharnessly are documented here.
 - Debian package builder, package lifecycle scripts, signed APT metadata builder, repository bootstrap script, package checksums, and release workflow support for aarch64 and x86_64.
 - Termux mobile-first TUI breakpoint policy for under 50, 50–89, and 90+ columns with persistent branding and Termux navigation hints.
 
+### Fixed
+
+- Synchronized Rust, UI, NPM, and Python release metadata to the coordinated 0.2.7 line; added a CLI regression test that compares `utharness --version` with the Cargo package version.
+- Corrected the live Termux bootstrap and repository-relative checksum verification paths in the release workflow and repository builder.
+
 ### Notes and limitations
 
-The Termux package workflow is prepared and validated through host-side package/layout tests and simulated Termux CLI/PTY tests. The sandbox does not contain an Android NDK, Android emulator, or physical Android device, so native aarch64/x86_64 Termux binaries and Android-version-specific behavior are validated by the tag-triggered GitHub workflow rather than claimed as locally executed. The signed repository requires protected `UTHARNESS_GPG_KEY_ID` and `UTHARNESS_GPG_PRIVATE_KEY` repository secrets before publication. The existing `v0.1.0` release predates this Termux package and does not contain a live Termux APT repository.
+The v0.2.6 Termux repository is live and has been verified from public Pages endpoints: both signed metadata forms, the published public key, both architecture indexes, package versions, and repository checksums pass. The sandbox does not contain an Android emulator or physical Android device, so Android-version-specific behavior, soft-keyboard behavior, and real Termux:API execution remain unverified. The coordinated 0.2.7 source and registry package publication is the next release step.
 
 ## [0.1.0] — 2026-08-27
 

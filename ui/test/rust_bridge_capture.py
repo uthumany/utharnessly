@@ -31,8 +31,10 @@ while time.time() < end:
             data.extend(os.read(fd, 65536))
         except OSError:
             break
+exit_code = None
 try:
-    os.waitpid(pid, 0)
+    _, wait_status = os.waitpid(pid, 0)
+    exit_code = os.waitstatus_to_exitcode(wait_status)
 except ChildProcessError:
     pass
 text = data.decode("utf-8", errors="replace")
@@ -40,6 +42,7 @@ plain_ansi = re.sub(r"\x1b\[[0-9;?]*[ -/]*[@-~]", "", text)
 print("ink marker:", "UTHARNESS AGENT — focus mode" in plain_ansi)
 print("ascii marker:", "UTHARNESS" in plain_ansi)
 print("prompt marker:", "Type your message" in plain_ansi or "Type a message" in plain_ansi)
-print("exit marker:", "utharness-ui:" in plain_ansi)
+print("exit status:", exit_code)
+print("exit marker:", exit_code == 0)
 plain = ''.join(char if char.isprintable() or char in '\\n\\r\\t' else ' ' for char in plain_ansi)
 print('visible sample:', '\\n'.join(line for line in plain.splitlines() if line.strip())[-18:])
