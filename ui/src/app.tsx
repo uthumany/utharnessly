@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useApp, useInput, useStdout } from 'ink';
 import { TextInput } from '@inkjs/ui';
 import type { FSWatcher } from 'chokidar';
-import { loadSnapshot, submitPrompt, watchRuntime } from './runtime.js';
-import { Banner, getBreakpoint, getColorMode, MessageRow, palette, PersistentHeader, PromptFrame, StartupTips, StatusBar, WorkspaceWarning } from './components.js';
+import { loadSnapshot, runSkillCommand, submitPrompt, watchRuntime } from './runtime.js';
+import { Banner, getBreakpoint, getColorMode, MessageRow, palette, PersistentHeader, PromptFrame, SkillManager, StartupTips, StatusBar, WorkspaceWarning } from './components.js';
 import type { CommandItem, Message, RuntimeSnapshot } from './types.js';
 
 const commands: CommandItem[] = [
@@ -35,6 +35,9 @@ export function App() {
   const [scrollOffset, setScrollOffset] = useState(0);
   const [commandPalette, setCommandPalette] = useState(false);
   const [selectedCommand, setSelectedCommand] = useState(0);
+  const [skillManager, setSkillManager] = useState(false);
+  const [skillManagerText, setSkillManagerText] = useState('Loading indexed skills…');
+  const [skillManagerLoading, setSkillManagerLoading] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [terminalTick, setTerminalTick] = useState(0);
@@ -46,7 +49,8 @@ export function App() {
   const contentWidth = Math.max(28, columns - (breakpoint === 'compact' ? 2 : 8));
   const showTips = breakpoint !== 'compact' && rows >= 28;
   const showWarning = Boolean(snapshot && !snapshot.projectSpecific && breakpoint !== 'compact' && rows >= 24);
-  const chromeHeight = 3 + (breakpoint === 'compact' ? 4 : 8) + (showTips ? 6 : 0) + (showWarning ? 3 : 0) + 3 + 3;
+  const skillManagerHeight = skillManager ? Math.min(22, 4 + skillManagerText.split(/\r?\n/).length) : 0;
+  const chromeHeight = 3 + (breakpoint === 'compact' ? 4 : 8) + (showTips ? 6 : 0) + (showWarning ? 3 : 0) + skillManagerHeight + 3 + 3;
   const chatHeight = Math.max(2, rows - chromeHeight);
   const visibleRows = Math.max(1, Math.floor(chatHeight / (breakpoint === 'compact' ? 2 : 3)));
   const slashSuggestions = useMemo(() => {
@@ -93,6 +97,19 @@ export function App() {
     return () => { process.off('SIGWINCH', resize); };
   }, []);
 
+  const openSkillManager = async (query?: string) => {
+    setSkillManager(true);
+    setSkillManagerLoading(true);
+    const args = query ? ['search', query, '--limit', '12'] : ['list', '12'];
+    const [output, categories] = await Promise.all([
+      runSkillCommand(args),
+      runSkillCommand(['categories'])
+    ]);
+    const categoryLine = categories.split(/\r?\n/).filter(Boolean).slice(0, 10).join(' · ');
+    setSkillManagerText(`CATEGORIES · ${categoryLine}\n${output}`);
+    setSkillManagerLoading(false);
+  };
+
   useEffect(() => {
     const stdin = process.stdin;
     if (!stdin.isTTY) return;
@@ -114,10 +131,16 @@ export function App() {
       setCommandPalette(value => !value);
       return;
     }
-    if (key.escape) {
-      setCommandPalette(false);
+    if (key.ctrl && input === 's') {
+      void openSkillManager();
       return;
     }
+    if (key.escape) {
+      setCommandPalette(false);
+      setSkillManager(false);
+      return;
+    }
+    if (skillManager) return;
     if (commandPalette) {
       if (key.upArrow) setSelectedCommand(value => Math.max(0, value - 1));
       if (key.downArrow) setSelectedCommand(value => Math.min(commands.length - 1, value + 1));
@@ -175,6 +198,14 @@ export function App() {
       setCommandPalette(true);
       return;
     }
+    if (prompt === '/skills') {
+      void openSkillManager();
+      return;
+    }
+    if (prompt.startsWith('/skills search ')) {
+      void openSkillManager(prompt.slice('/skills search '.length).trim());
+      return;
+    }
     setHistory(current => [...current.filter(item => item !== prompt), prompt].slice(-30));
     setHistoryIndex(-1);
     setDraft('');
@@ -192,6 +223,7 @@ export function App() {
       <Banner breakpoint={breakpoint} colorMode={colorMode} />
       {showTips ? <StartupTips colorMode={colorMode} /> : null}
       {showWarning ? <WorkspaceWarning colorMode={colorMode} /> : null}
+      {skillManager ? <SkillManager text={skillManagerLoading ? 'Loading indexed skills…' : skillManagerText} width={contentWidth} colorMode={colorMode} /> : null}
       {runtimeError ? <Text color={colorMode === 'mono' ? undefined : palette.error}>Runtime: {runtimeError}</Text> : null}
       <Box flexDirection="column" height={chatHeight} overflow="hidden">
         {visibleMessages.map(message => <MessageRow key={message.id} message={message} width={contentWidth} colorMode={colorMode} />)}
@@ -205,7 +237,7 @@ export function App() {
         </Box>
       ) : null}
       <PromptFrame width={contentWidth} colorMode={colorMode}>
-        <TextInput key={inputVersion} placeholder={placeholder} defaultValue={draft} suggestions={inputSuggestions} onChange={setDraft} onSubmit={handleSubmit} isDisabled={streaming || commandPalette} />
+        <TextInput key={inputVersion} placeholder={placeholder} defaultValue={draft} suggestions={inputSuggestions} onChange={setDraft} onSubmit={handleSubmit} isDisabled={streaming || commandPalette || skillManager} />
       </PromptFrame>
       {slashSuggestions.length > 0 ? <Text color={colorMode === 'mono' ? undefined : palette.purple}>  {slashSuggestions.map(item => `${item.command} · ${item.description}`).join('   ')}</Text> : null}
       {snapshot ? <StatusBar snapshot={snapshot} width={contentWidth} colorMode={colorMode} /> : <Text color={colorMode === 'mono' ? undefined : palette.muted}>Loading runtime status…</Text>}

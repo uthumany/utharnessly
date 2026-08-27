@@ -81,6 +81,17 @@ export async function loadSnapshot(cwd = process.cwd()): Promise<RuntimeSnapshot
   return runtimeSchema.parse(snapshot);
 }
 
+export async function runSkillCommand(args: string[], cwd = process.cwd()): Promise<string> {
+  const binary = runtimeBinary();
+  try {
+    await fs.access(binary);
+    const result = await execa(binary, ['skills', ...args], { cwd, reject: false, timeout: 8_000 });
+    return (result.stdout || result.stderr).trim() || 'Skill Engine returned no output.';
+  } catch (error) {
+    return `Skill Engine unavailable: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 export async function submitPrompt(prompt: string, cwd = process.cwd()): Promise<{ text: string; tool?: ToolCard }> {
   const binary = runtimeBinary();
   let commandResult = '';

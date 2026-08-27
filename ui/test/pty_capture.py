@@ -65,4 +65,5 @@ def capture(cols, rows, label, keys=b""):
 for cols, rows in [(40, 18), (60, 20), (80, 24), (120, 36), (160, 40), (220, 44)]:
     capture(cols, rows, "focus")
 capture(120, 36, "palette", b"\x0b")
+capture(120, 36, "skills", b"\x13")
 print("captured")

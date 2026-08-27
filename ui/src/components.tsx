@@ -115,6 +115,19 @@ function toolColor(tool: ToolCard, colorMode: ColorMode): string | undefined {
   return tone(palette.green, colorMode);
 }
 
+export function SkillManager({ text, width, colorMode }: { text: string; width: number; colorMode: ColorMode }) {
+  const color = tone(palette.purple, colorMode);
+  const lines = text.split(/\r?\n/).slice(0, 18);
+  return (
+    <Box borderStyle="round" borderColor={color} paddingX={1} flexDirection="column" width={Math.min(Math.max(28, width), 92)}>
+      <Text color={color} bold>SKILL MANAGER · indexed registry</Text>
+      <Text color={tone(palette.muted, colorMode)}>Ctrl+S opens this view · use /skills search &lt;query&gt; for ranked results</Text>
+      {lines.map((line, index) => <Text key={`${index}-${line}`} color={index === 0 ? tone(palette.cyan, colorMode) : tone(palette.text, colorMode)} wrap="truncate-end">{line}</Text>)}
+      <Text color={tone(palette.muted, colorMode)}>Install is lazy and review-gated · external skills remain metadata-only until explicitly allowed</Text>
+    </Box>
+  );
+}
+
 export function ToolCardView({ tool, width, colorMode }: { tool: ToolCard; width: number; colorMode: ColorMode }) {
   const cardWidth = Math.max(28, Math.min(78, width - 8));
   const color = toolColor(tool, colorMode);

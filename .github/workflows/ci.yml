@@ -80,3 +80,8 @@ jobs:
           HOME="$home" UTHARNESS_HOME="$home/.utharness" "$GITHUB_WORKSPACE/target/release/utharness" memory add "CI persistence works"
           HOME="$home" UTHARNESS_HOME="$home/.utharness" "$GITHUB_WORKSPACE/target/release/utharness" memory search persistence
           HOME="$home" UTHARNESS_HOME="$home/.utharness" "$GITHUB_WORKSPACE/target/release/utharness" doctor
+          HOME="$home" UTHARNESS_HOME="$home/.utharness" "$GITHUB_WORKSPACE/target/release/utharness" skills search git
+          HOME="$home" UTHARNESS_HOME="$home/.utharness" "$GITHUB_WORKSPACE/target/release/utharness" skills install builtin.git-status
+          HOME="$home" UTHARNESS_HOME="$home/.utharness" "$GITHUB_WORKSPACE/target/release/utharness" skills test builtin.git-status
+          HOME="$home" UTHARNESS_HOME="$home/.utharness" "$GITHUB_WORKSPACE/target/release/utharness" skills doctor
+          HOME="$home" UTHARNESS_HOME="$home/.utharness" "$GITHUB_WORKSPACE/target/release/utharness" skills remove builtin.git-status

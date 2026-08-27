@@ -85,7 +85,15 @@ utharness sessions new TITLE       Create a session
 utharness memory add CONTENT       Store workspace memory
 utharness memory search QUERY      Search indexed memory
 utharness checkpoint               Create a session checkpoint
-utharness skills                   List built-in skills
+utharness skills                   List the indexed Skill Registry
+utharness skills search QUERY      Search ranked skill metadata
+utharness skills info SKILL        Inspect a normalized skill manifest
+utharness skills install SKILL     Lazily install a reviewed skill
+utharness skills remove SKILL      Quarantine and remove an installed skill
+utharness skills rollback SKILL    Restore the newest quarantined installation
+utharness skills test SKILL        Re-evaluate runtime and permission health
+utharness skills run SKILL        Run a built-in skill adapter
+utharness skills sync              Synchronize bounded public source metadata
 utharness providers                List provider routes
 utharness agents                   List agent roles
 utharness tools                    List registered tools and policy modes
@@ -149,6 +157,12 @@ uvx utharnessly --help
 ```
 
 Both registry launchers currently support Linux x64, macOS x64, and Windows x64 release artifacts. Use `utharnessly update` to clear and redownload the cached runtime. Use `utharnessly uninstall` to print the package-manager and cache-removal commands. The complete package-manager, source, platform, terminal, compatibility, and troubleshooting matrix is in [`docs/installation.md`](./docs/installation.md).
+
+## Skill Engine
+
+UTHARNESS includes an indexed Skill Registry for modular agent capabilities. It supports normalized manifests, FTS search, bounded synchronization from the [VoltAgent catalog](https://github.com/VoltAgent/awesome-agent-skills) and [skills.sh](https://www.skills.sh/), lazy installation, checksum validation, health checks, quarantine, local manifest import, and automatic skill recommendations in bounded autonomous planning. External skills are never executed merely because they appear in a catalog; review-gated adapters and explicit permissions are required.
+
+See [`docs/skills.md`](./docs/skills.md) for the schema, lifecycle, source adapter behavior, scaling model, safety boundaries, and copyable commands. The registry is intentionally metadata-first: it can index 100,000-plus records without installing their dependency trees locally.
 
 ## Architecture
 

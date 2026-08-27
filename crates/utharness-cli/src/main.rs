@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
 use serde::Deserialize;
 use serde_json::json;
+use skills::SkillRegistry;
 use std::{
     env, fs,
     io::{self, IsTerminal},
@@ -14,6 +15,7 @@ use utharness_security::Policy;
 use utharness_storage::Storage;
 
 mod banner;
+mod skills;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -45,7 +47,7 @@ enum CommandKind {
         action: MemoryAction,
     },
     Checkpoint,
-    Skills,
+    Skills(SkillsArgs),
     Providers,
     Agents,
     Tools,
@@ -112,6 +114,59 @@ enum MemoryAction {
     },
     Search {
         query: String,
+    },
+}
+
+#[derive(Args, Debug)]
+struct SkillsArgs {
+    #[command(subcommand)]
+    action: Option<SkillAction>,
+}
+
+#[derive(Subcommand, Debug)]
+enum SkillAction {
+    List {
+        #[arg(default_value_t = 40)]
+        limit: usize,
+    },
+    Search {
+        query: String,
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+    },
+    Categories,
+    Info {
+        skill: String,
+    },
+    Install {
+        skill: String,
+        #[arg(long)]
+        allow_external: bool,
+    },
+    Remove {
+        skill: String,
+    },
+    Rollback {
+        skill: String,
+    },
+    Update,
+    Test {
+        skill: String,
+    },
+    Doctor,
+    Run {
+        skill: String,
+        #[arg(long)]
+        allow_external: bool,
+    },
+    Sync {
+        #[arg(long, default_value = "all")]
+        source: String,
+        #[arg(long, default_value_t = 500)]
+        limit: usize,
+    },
+    Import {
+        path: PathBuf,
     },
 }
 
@@ -205,10 +260,7 @@ fn main() -> Result<()> {
         Some(CommandKind::Sessions { action }) => sessions(action),
         Some(CommandKind::Memory { action }) => memory(action),
         Some(CommandKind::Checkpoint) => checkpoint(),
-        Some(CommandKind::Skills) => {
-            println!("BUILT-IN SKILLS\nrepo-explorer\ncode-search\nbuild-fixer\ntest-runner\ndebugger\ncode-review\ngit-workflow\nweb-research\ndocumentation-writer");
-            Ok(())
-        }
+        Some(CommandKind::Skills(args)) => skills_command(args),
         Some(CommandKind::Providers) => {
             println!("PROVIDERS\nlocal / offline planner\nOpenAI-compatible / configure with UTHARNESS_PROVIDER_URL\nOllama / local model route");
             Ok(())
@@ -222,6 +274,137 @@ fn main() -> Result<()> {
             Ok(())
         }
     }
+}
+
+fn skill_registry() -> Result<SkillRegistry> {
+    let data_dir = env::var_os("UTHARNESS_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            dirs_fallback()
+                .join(".local")
+                .join("share")
+                .join("utharness")
+        });
+    SkillRegistry::open(data_dir.join("skills"))
+}
+
+fn print_skill_summary(record: &skills::SkillRecord) {
+    println!(
+        "{}  [{}]  {}  v{}  status={} health={}",
+        record.manifest.id,
+        record.manifest.category,
+        record.manifest.name,
+        record.manifest.version,
+        record.status,
+        record.health
+    );
+    println!("  {}", record.manifest.description);
+}
+
+fn skills_command(args: SkillsArgs) -> Result<()> {
+    let registry = skill_registry()?;
+    registry.seed_builtins()?;
+    match args.action.unwrap_or(SkillAction::List { limit: 40 }) {
+        SkillAction::List { limit } => {
+            println!("UTHARNESS SKILL REGISTRY · {} indexed", registry.count()?);
+            for record in registry.list(None, limit)? {
+                print_skill_summary(&record);
+            }
+        }
+        SkillAction::Search { query, limit } => {
+            println!("SKILL SEARCH · {query}");
+            for record in registry.list(Some(&query), limit)? {
+                print_skill_summary(&record);
+            }
+        }
+        SkillAction::Categories => {
+            for category in registry.categories()? {
+                println!("{category}");
+            }
+        }
+        SkillAction::Info { skill } => {
+            let record = registry.get(&skill)?;
+            println!(
+                "status={} health={} installed_version={:?}",
+                record.status, record.health, record.installed_version
+            );
+            println!("{}", serde_json::to_string_pretty(&record.manifest)?);
+        }
+        SkillAction::Install {
+            skill,
+            allow_external,
+        } => {
+            let record = registry.install(&skill, allow_external)?;
+            println!(
+                "installed {} v{} ({})",
+                record.manifest.id, record.manifest.version, record.health
+            );
+        }
+        SkillAction::Remove { skill } => {
+            let record = registry.remove(&skill)?;
+            println!(
+                "removed {}; quarantine retained under {}",
+                record.manifest.id,
+                registry.root().join("quarantine").display()
+            );
+        }
+        SkillAction::Rollback { skill } => {
+            let record = registry.rollback(&skill)?;
+            println!(
+                "rolled back {}: status={} health={}",
+                record.manifest.id, record.status, record.health
+            );
+        }
+        SkillAction::Update => {
+            println!(
+                "refreshed health for {} installed skill(s)",
+                registry.update_installed()?
+            );
+        }
+        SkillAction::Test { skill } => {
+            let record = registry.test(&skill)?;
+            println!(
+                "tested {}: status={} health={}",
+                record.manifest.id, record.status, record.health
+            );
+        }
+        SkillAction::Doctor => {
+            let issues = registry.doctor()?;
+            println!("SKILL REGISTRY DOCTOR");
+            if issues.is_empty() {
+                println!("✓ registry healthy · {} indexed", registry.count()?);
+            }
+            for issue in issues {
+                println!("! {issue}");
+            }
+        }
+        SkillAction::Run {
+            skill,
+            allow_external,
+        } => {
+            let result = registry.run(&skill, &env::current_dir()?, allow_external)?;
+            println!("SKILL RESULT · {skill}\n{result}");
+        }
+        SkillAction::Sync { source, limit } => {
+            for report in registry.sync(&source, limit)? {
+                println!(
+                    "{}: imported={} skipped={}",
+                    report.source, report.imported, report.skipped
+                );
+                for error in report.errors {
+                    println!("  ! {error}");
+                }
+            }
+        }
+        SkillAction::Import { path } => {
+            let record = registry.import_manifest_path(&path)?;
+            println!(
+                "imported {} v{}",
+                record.manifest.id, record.manifest.version
+            );
+        }
+    }
+    Ok(())
 }
 
 fn chat(args: ChatArgs) -> Result<()> {
@@ -281,13 +464,47 @@ fn autonomous(args: AutonomousArgs) -> Result<()> {
     let root = fs::canonicalize(&args.workspace)?;
     let app = App::open(&root)?;
     let session = app.ensure_session("Autonomous agent test")?;
-    let provider = OpenRouter::from_environment()?;
+    let registry = skill_registry()?;
+    registry.seed_builtins()?;
+    let recommendations = registry.recommend(&args.prompt, 3)?;
+    let recommended_names = recommendations
+        .iter()
+        .map(|record| record.manifest.id.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut temporary_skill_ids = Vec::new();
+    let mut skill_evidence = Vec::new();
+    for record in recommendations.iter().take(3) {
+        if record.manifest.source.provider == "builtin" && record.status != "installed" {
+            registry.install(&record.manifest.id, false)?;
+            temporary_skill_ids.push(record.manifest.id.clone());
+        }
+        if record.manifest.source.provider == "builtin" {
+            if let Ok(result) = registry.run(&record.manifest.id, &root, false) {
+                skill_evidence.push(format!(
+                    "{}: {}",
+                    record.manifest.id,
+                    result.lines().next().unwrap_or("ready")
+                ));
+            }
+        }
+    }
+    let provider = match OpenRouter::from_environment() {
+        Ok(provider) => provider,
+        Err(error) => {
+            for skill_id in &temporary_skill_ids {
+                let _ = registry.remove(skill_id);
+            }
+            return Err(error);
+        }
+    };
     let max_steps = args.max_steps.clamp(1, 8);
     let planner_prompt = format!(
-        "You are the Utharness autonomous planner. Return only valid JSON with this shape: {{\"summary\":\"short summary\",\"steps\":[{{\"tool\":\"list_directory|read_file|git_status|git_diff\",\"target\":\"relative path or null\",\"rationale\":\"short reason\"}}],\"final_response\":\"short completion note\"}}. Plan at most {max_steps} read-only steps. Never request shell, write, network, secrets, or paths outside the workspace. Task: {}",
+        "You are the Utharness autonomous planner. Return only valid JSON with this shape: {{\"summary\":\"short summary\",\"steps\":[{{\"tool\":\"list_directory|read_file|git_status|git_diff\",\"target\":\"relative path or null\",\"rationale\":\"short reason\"}}],\"final_response\":\"short completion note\"}}. Plan at most {max_steps} read-only steps. Never request shell, write, network, secrets, or paths outside the workspace. Candidate skills from the local registry: {recommended_names}. Loaded skill evidence: {}. Task: {}",
+        skill_evidence.join("; "),
         args.prompt
     );
-    let plan: AgentPlan = provider.complete_json(&[
+    let plan: AgentPlan = match provider.complete_json(&[
         ChatMessage {
             role: "system".into(),
             content: "You are a careful, deterministic coding-agent planner. Use only the tools explicitly allowed by the user-facing contract.".into(),
@@ -296,12 +513,26 @@ fn autonomous(args: AutonomousArgs) -> Result<()> {
             role: "user".into(),
             content: planner_prompt,
         },
-    ])?;
+    ]) {
+        Ok(plan) => plan,
+        Err(error) => {
+            for skill_id in &temporary_skill_ids { let _ = registry.remove(skill_id); }
+            return Err(error);
+        }
+    };
     app.storage
         .append_message(session.id, MessageRole::User, &args.prompt)?;
     println!("AUTONOMOUS AGENT RUN");
     println!("model: {}", provider.model());
     println!("task:  {}", args.prompt);
+    println!(
+        "skills: {}",
+        if recommended_names.is_empty() {
+            "none"
+        } else {
+            &recommended_names
+        }
+    );
     println!("plan:  {}", plan.summary);
     println!();
 
@@ -355,6 +586,9 @@ fn autonomous(args: AutonomousArgs) -> Result<()> {
     println!();
     println!("AGENT RESULT");
     println!("{}", Policy::redact(&completion));
+    for skill_id in temporary_skill_ids {
+        registry.remove(&skill_id)?;
+    }
     Ok(())
 }
 
