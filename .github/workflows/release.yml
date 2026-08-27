@@ -111,6 +111,7 @@ jobs:
           TERMUX_UI_DIST: ui/dist
         run: |
           set -euo pipefail
+          export UTHARNESS_VERSION="${GITHUB_REF_NAME#v}"
           packages/utharness/build.sh
           deb=$(find dist/termux -maxdepth 1 -name '*.deb' -print -quit)
           test -n "$deb"

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PREFIX_VALUE="${PREFIX:?Run this script inside Termux so PREFIX is defined}"
-REPO_BASE_URL="${UTHARNESS_TERMUX_REPO_BASE_URL:-https://uthumany.github.io/utharnessly/apt/termux}"
+REPO_BASE_URL="${UTHARNESS_TERMUX_REPO_BASE_URL:-https://uthumany.github.io/utharnessly/termux}"
 KEY_URL="${UTHARNESS_TERMUX_KEY_URL:-$REPO_BASE_URL/utharness.gpg}"
 SOURCE_FILE="$PREFIX_VALUE/etc/apt/sources.list.d/utharness.list"
 KEY_FILE="$PREFIX_VALUE/etc/apt/trusted.gpg.d/utharness.gpg"
