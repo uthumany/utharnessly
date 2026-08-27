@@ -19,7 +19,22 @@ All notable changes to utharnessly are documented here.
 
 ### Notes and limitations
 
-The v0.2.6 Termux repository is live and has been verified from public Pages endpoints: both signed metadata forms, the published public key, both architecture indexes, package versions, and repository checksums pass. The sandbox does not contain an Android emulator or physical Android device, so Android-version-specific behavior, soft-keyboard behavior, and real Termux:API execution remain unverified. The coordinated 0.2.7 source and registry package publication is the next release step.
+The v0.2.7 Termux repository is live and has been verified from public Pages endpoints: both signed metadata forms, the published public key, both architecture indexes, package versions, and repository checksums pass. The sandbox does not contain an Android emulator or physical Android device, so Android-version-specific behavior, soft-keyboard behavior, and real Termux:API execution remain unverified. The coordinated 0.2.7 source and registry package publication is complete.
+
+## [0.2.7] — 2026-08-27
+
+### Fixed
+
+- Synchronized Rust, UI, NPM, and Python release metadata and version reporting to 0.2.7.
+- Added a CLI regression test covering `utharness --version` against the Cargo package version.
+- Corrected Termux bootstrap exit behavior and repository-relative checksum generation.
+- Published and verified signed Termux packages for Android `aarch64` and `x86_64`, with live GitHub Pages metadata, checksums, and release assets.
+
+### Verification
+
+- Hosted CI and Security passed for the release source.
+- Rust, Ink UI, NPM, PyPI, CLI safety, mock-provider, package, and PTY bridge checks passed.
+- Direct physical-device, Android-version, soft-keyboard, and Termux:API testing remains outside the available environment.
 
 ## [0.1.0] — 2026-08-27
 
@@ -47,6 +62,7 @@ The v0.2.6 Termux repository is live and has been verified from public Pages end
 
 Provider credentials are never committed or persisted by the runtime. The interactive UI provides bounded offline planning, native CLI handoff through `execa`, local streaming presentation, and SQLite-backed runtime metadata; broader provider token streaming and autonomous tool execution remain subsequent backend milestones.
 
-Published native release artifacts target Linux x64, macOS x64, and Windows x64. ARM, Android, iOS/iPadOS, FreeBSD, Homebrew, apt, Nix, winget, and other unlisted package ecosystems use source or remote-host guidance rather than fabricated product packages.
+Published native release artifacts target Linux x64, macOS x64, and Windows x64; the v0.2.7 Termux release adds signed Android `aarch64` and `x86_64` packages. iOS/iPadOS, FreeBSD, desktop ARM variants, Homebrew, apt, Nix, winget, and other unlisted package ecosystems use source or remote-host guidance rather than fabricated product packages.
 
+[0.2.7]: https://github.com/uthumany/utharnessly/releases/tag/v0.2.7
 [0.1.0]: https://github.com/uthumany/utharnessly/releases/tag/v0.1.0

@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/uthumany/utharnessly/main/packaging
 
 ## Termux installation
 
-A native Termux package is built under [`packages/utharness`](./packages/utharness) and is published through the signed UTHARNESS APT repository. The current live repository provides the v0.2.6 packages and does not require root:
+A native Termux package is built under [`packages/utharness`](./packages/utharness) and is published through the signed UTHARNESS APT repository. The current live repository provides the v0.2.7 packages and does not require root:
 
 ```bash
 pkg update
@@ -72,7 +72,7 @@ utharness termux storage enable
 utharness termux api
 ```
 
-The signed Termux repository is live at v0.2.6. The package and repository were built and cryptographically verified in CI and from the published Pages endpoints; physical-device, Android-version-specific, soft-keyboard, and real Termux:API testing still require an actual Android/Termux environment. See [`termux/README.md`](./termux/README.md) for package-builder details.
+The signed Termux repository is live at v0.2.7. The package and repository were built and cryptographically verified in CI and from the published Pages endpoints; physical-device, Android-version-specific, soft-keyboard, and real Termux:API testing still require an actual Android/Termux environment. See [`termux/README.md`](./termux/README.md) for package-builder details.
 
 ## Quick start
 
