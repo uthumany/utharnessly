@@ -181,4 +181,3 @@ jobs:
             dist/termux-repository/pool/main/utharness/*.deb
             dist/utharness-termux-repository-*.tar.gz
             dist/utharness-termux-repository-*.tar.gz.sha256
-            dist/termux-repository/SHA256SUMS
