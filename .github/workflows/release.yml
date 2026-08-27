@@ -100,7 +100,9 @@ jobs:
       - run: pnpm --dir ui install --frozen-lockfile
       - run: pnpm --dir ui build
       - name: Build Android-compatible Rust binary
-        run: cargo ndk -t ${{ matrix.ndk_arch }} -p 26 build --release --package utharness-cli
+        env:
+          CARGO_NDK_PLATFORM: 26
+        run: cargo ndk -t ${{ matrix.ndk_arch }} build --release --package utharness-cli
       - name: Build and validate Termux Debian package
         shell: bash
         env:
