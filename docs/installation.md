@@ -1,5 +1,7 @@
 # utharnessly installation, package, and platform guide
 
+For the shortest copyable install page, start with [`INSTALLATION.md`](../INSTALLATION.md). This document contains the full platform, terminal, update, uninstall, and troubleshooting matrix.
+
 `utharnessly` is distributed as a native Rust CLI with a bundled React/Ink terminal UI. The first public release provides signed release archives for **Linux x64, macOS x64, and Windows x64**, plus thin launchers on **npm** and **PyPI** that download and verify the matching native archive on first use. Other combinations are documented as source, remote-host, or unsupported paths rather than being presented as working installers.
 
 ## Quick start
@@ -61,7 +63,7 @@ The Python package is a dependency-free launcher. It uses the same release archi
 | pnpm | **Supported and tested** | `pnpm add --global utharnessly` | Provides the same npm launcher; requires pnpm and Node.js 18+. |
 | pnpx | **Supported and tested** | `pnpx utharnessly --version` | Ephemeral pnpm launcher; native archive is cached per user. |
 | Bun / `bunx` | **Partially supported** | `bunx utharnessly --help` | Bun can execute the dependency-free npm launcher, but the downloaded native target still must match Linux x64, macOS x64, or Windows x64. Bun is not used to build the Ink bundle in release archives. |
-| Deno | **Source-only** | `deno run --allow-all --node-modules-dir=auto ui/src/index.tsx` | Useful for direct UI experiments where Deno Node compatibility works; not a supported native distribution channel. |
+| Deno | **Unverified/source-only** | Use the Git source workflow; do not treat `deno run npm:utharnessly` as a tested product installer. | Deno npm compatibility may be useful for experiments, but no native Deno distribution path is currently verified. |
 | `uv` / `uvx` | **Supported and tested** | `uv tool install utharnessly` or `uvx utharnessly --version` | Installs the PyPI launcher; requires Python 3.9+ through uv and a supported native release target. |
 | `pip` / `pipx` / `python -m` | **Supported and tested** | `python -m pip install utharnessly`; `pipx install utharnessly` | Installs the PyPI launcher and its `utharness` alias; requires Python 3.9+. |
 | Cargo | **Source/native CLI only** | `cargo build --release` | Produces `target/release/utharness`; a bare `cargo install` does not include the bundled UI and is not advertised as a complete TUI install. |

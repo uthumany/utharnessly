@@ -20,6 +20,26 @@
 
 > **Current status:** the repository is public and ships the working offline-first runtime, native CLI, bounded autonomous inspection path, persistent SQLite journal, and bundled TypeScript/Ink TUI. Provider streaming, broader autonomous tool execution, and native packages for every operating system remain subsequent milestones.
 
+## Installation methods
+
+The copyable installation entrypoint is [`INSTALLATION.md`](./INSTALLATION.md). It includes npm, npx, pnpm, pnpx, Bun, PyPI, pipx, uv, curl, PowerShell, Git source builds, runtime managers, and an explicit matrix for unavailable package channels. The package source manifests are [`packages/utharnessly-npm`](./packages/utharnessly-npm) and [`python/utharnessly`](./python/utharnessly).
+
+```bash
+# npm
+npm install --global utharnessly
+utharness --version
+
+# npx
+npx --yes utharnessly --help
+
+# PyPI
+python -m pip install utharnessly
+utharness --version
+
+# Linux/macOS shell installer
+curl -fsSL https://raw.githubusercontent.com/uthumany/utharnessly/main/packaging/install.sh | bash
+```
+
 ## Quick start
 
 ```bash
