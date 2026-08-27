@@ -24,6 +24,14 @@ export const palette = {
 
 const brandGradient = gradient(['#F6B817', '#FF963F', '#FF5F63']);
 
+export function getTermuxBreakpoint(columns: number): Breakpoint {
+  if (columns < 50) return 'mobile';
+  if (columns < 90) return 'narrow';
+  if (columns >= 200) return 'ultra';
+  if (columns >= 120) return 'wide';
+  return 'standard';
+}
+
 export function getBreakpoint(columns: number): Breakpoint {
   if (columns >= 200) return 'ultra';
   if (columns >= 120) return 'wide';
@@ -64,10 +72,10 @@ const mediumAscii = [
 const compactAscii = ['UTHARNESS', 'AGENT TERMINAL'];
 
 export function Banner({ breakpoint, colorMode }: { breakpoint: Breakpoint; colorMode: ColorMode }) {
-  const lines = breakpoint === 'compact' ? compactAscii : breakpoint === 'narrow' ? ['UTHARNESS', 'AGENT TERMINAL'] : breakpoint === 'standard' ? mediumAscii : wideAscii;
+  const lines = breakpoint === 'mobile' || breakpoint === 'compact' ? compactAscii : breakpoint === 'narrow' ? ['UTHARNESS', 'AGENT TERMINAL'] : breakpoint === 'standard' ? mediumAscii : wideAscii;
   return (
     <Box flexDirection="column" marginTop={1} marginBottom={1}>
-      {breakpoint === 'compact' ? (
+      {breakpoint === 'mobile' || breakpoint === 'compact' ? (
         <Text color={colorMode === 'mono' ? undefined : palette.amber}>{['UTHARNESS', 'AGENT TERMINAL'].join(String.fromCharCode(10))}</Text>
       ) : lines.map((line, index) => (
         <Text key={`${line}-${index}`}>
@@ -78,17 +86,17 @@ export function Banner({ breakpoint, colorMode }: { breakpoint: Breakpoint; colo
   );
 }
 
-export function PersistentHeader({ breakpoint, colorMode }: { breakpoint: Breakpoint; colorMode: ColorMode }) {
+export function PersistentHeader({ breakpoint, colorMode, platform }: { breakpoint: Breakpoint; colorMode: ColorMode; platform?: string }) {
   const muted = tone(palette.muted, colorMode);
   return (
     <Box width="100%" justifyContent="space-between" borderStyle="single" borderColor={tone(palette.border, colorMode)} paddingX={1}>
-      <Text color={tone(palette.text, colorMode)} bold>{breakpoint === 'compact' ? 'UTHARNESS · focus mode' : 'UTHARNESS AGENT — focus mode'}</Text>
-      {breakpoint === 'compact' ? <Text color={muted}>⌘K · ?</Text> : <Text color={muted}>⌘K commands    ? help</Text>}
+      <Text color={tone(palette.text, colorMode)} bold>{breakpoint === 'mobile' || breakpoint === 'compact' ? 'UTHARNESS · focus mode' : `UTHARNESS AGENT — ${platform === 'termux' ? 'Termux · ' : ''}focus mode`}</Text>
+      {breakpoint === 'mobile' || breakpoint === 'compact' ? <Text color={muted}>⌘K · ?</Text> : <Text color={muted}>{platform === 'termux' ? '↑↓ navigate · Enter select' : '⌘K commands    ? help'}</Text>}
     </Box>
   );
 }
 
-export function StartupTips({ colorMode }: { colorMode: ColorMode }) {
+export function StartupTips({ colorMode, termux = false }: { colorMode: ColorMode; termux?: boolean }) {
   return (
     <Box flexDirection="column" marginBottom={1}>
       <Text color={tone(palette.amber, colorMode)} bold>Tips for getting started:</Text>
@@ -96,6 +104,7 @@ export function StartupTips({ colorMode }: { colorMode: ColorMode }) {
       <Text color={tone(palette.text, colorMode)}>2. Be specific for the best results.</Text>
       <Text color={tone(palette.text, colorMode)}>3. Use <Text color={tone(palette.cyan, colorMode)}>@path/to/file</Text> to add context.</Text>
       <Text color={tone(palette.text, colorMode)}>4. Type <Text color={tone(palette.purple, colorMode)}>/help</Text> for more information.</Text>
+      {termux ? <Text color={tone(palette.cyan, colorMode)}>Termux: Ctrl+K commands · Ctrl+S skills · Tab/Enter select · Esc back</Text> : null}
     </Box>
   );
 }
@@ -187,7 +196,7 @@ export function PromptFrame({ width, colorMode, children }: { width: number; col
 
 export function StatusBar({ snapshot, width, colorMode }: { snapshot: RuntimeSnapshot; width: number; colorMode: ColorMode }) {
   if (width < 100) {
-    const compact = `${snapshot.workspace}  │  ${snapshot.permission}  │  ${snapshot.provider}/${snapshot.model}  │  ${snapshot.branch}  │  ${snapshot.context}`;
+    const compact = `${snapshot.workspace}  │  ${snapshot.permission}  │  ${snapshot.provider}/${snapshot.model}  │  ${snapshot.branch}  │  ${snapshot.context}${snapshot.platform === 'termux' ? `  │  API:${snapshot.termuxApi}` : ''}`;
     return (
       <Box borderStyle="single" borderColor={tone(palette.border, colorMode)} paddingX={1} marginTop={1} width={Math.max(24, width)}>
         <Text color={tone(palette.cyan, colorMode)} wrap="truncate-end">{compact}</Text>
@@ -199,7 +208,8 @@ export function StatusBar({ snapshot, width, colorMode }: { snapshot: RuntimeSna
     ['◈', snapshot.permission, palette.amber],
     ['✦', `${snapshot.provider}/${snapshot.model}`, palette.purple],
     ['⌘', snapshot.branch, palette.green],
-    ['≡', snapshot.context, palette.cyan]
+    ['≡', snapshot.context, palette.cyan],
+    ...(snapshot.platform === 'termux' ? [['⌁', `Termux/${snapshot.termuxApi}`, palette.cyan]] : [])
   ];
   return (
     <Box borderStyle="single" borderColor={tone(palette.border, colorMode)} paddingX={1} marginTop={1} width={Math.max(24, width)}>

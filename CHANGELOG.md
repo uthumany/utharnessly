@@ -2,6 +2,20 @@
 
 All notable changes to utharnessly are documented here.
 
+## [Unreleased]
+
+### Added
+
+- Termux-native command family: `termux info`, `termux setup`, `termux api`, `termux keys install`, `termux storage enable`, `termux permissions`, and `termux doctor`.
+- Android/Termux environment detection for architecture, `$PREFIX`, shell, terminal size/color, storage, optional Termux:API, Node, Python, Git, SSH, curl, OpenSSL, disk, RAM, DNS, and network status.
+- No-root Termux path contract using `$PREFIX/bin/utharness`, `$PREFIX/lib/utharness`, `$PREFIX/share/utharness`, `~/.config/utharness`, `~/.local/share/utharness`, and `~/.cache/utharness`.
+- Debian package builder, package lifecycle scripts, signed APT metadata builder, repository bootstrap script, package checksums, and release workflow support for aarch64 and x86_64.
+- Termux mobile-first TUI breakpoint policy for under 50, 50–89, and 90+ columns with persistent branding and Termux navigation hints.
+
+### Notes and limitations
+
+The Termux package workflow is prepared and validated through host-side package/layout tests and simulated Termux CLI/PTY tests. The sandbox does not contain an Android NDK, Android emulator, or physical Android device, so native aarch64/x86_64 Termux binaries and Android-version-specific behavior are validated by the tag-triggered GitHub workflow rather than claimed as locally executed. The signed repository requires protected `UTHARNESS_GPG_KEY_ID` and `UTHARNESS_GPG_PRIVATE_KEY` repository secrets before publication. The existing `v0.1.0` release predates this Termux package and does not contain a live Termux APT repository.
+
 ## [0.1.0] — 2026-08-27
 
 ### Added

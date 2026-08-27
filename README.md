@@ -40,6 +40,40 @@ utharness --version
 curl -fsSL https://raw.githubusercontent.com/uthumany/utharnessly/main/packaging/install.sh | bash
 ```
 
+## Termux installation
+
+A native Termux package is prepared under [`packages/utharness`](./packages/utharness) and is published through the signed UTHARNESS APT repository by the tag-triggered release workflow. After the repository bootstrap is available for a release, install it without root:
+
+```bash
+pkg update
+pkg install curl
+curl -fsSL https://uthumany.github.io/utharnessly/termux/install.sh | bash
+pkg update
+pkg install utharness
+utharness setup
+utharness
+```
+
+The package installs only under `$PREFIX/bin/utharness`, `$PREFIX/lib/utharness`, and `$PREFIX/share/utharness`. User data remains under `~/.config/utharness`, `~/.local/share/utharness`, and `~/.cache/utharness`. Package-managed updates must use:
+
+```bash
+pkg update
+pkg upgrade utharness
+```
+
+Termux diagnostics and optional integrations are available through:
+
+```bash
+utharness termux info
+utharness termux doctor
+utharness termux permissions
+utharness termux keys install
+utharness termux storage enable
+utharness termux api
+```
+
+The signed Termux repository is not retroactively included in the existing `v0.1.0` release; until a signed Termux repository release is published, use the documented source build or the existing Linux-compatible release workflows. See [`termux/README.md`](./termux/README.md) for package-builder details.
+
 ## Quick start
 
 ```bash

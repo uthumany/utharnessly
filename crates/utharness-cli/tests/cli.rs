@@ -2,13 +2,26 @@ use std::process::Command;
 use tempfile::tempdir;
 
 fn run(bin: &str, cwd: &std::path::Path, home: &std::path::Path, args: &[&str]) -> String {
-    let output = Command::new(bin)
+    run_with_env(bin, cwd, home, args, &[])
+}
+
+fn run_with_env(
+    bin: &str,
+    cwd: &std::path::Path,
+    home: &std::path::Path,
+    args: &[&str],
+    extra_env: &[(&str, &str)],
+) -> String {
+    let mut command = Command::new(bin);
+    command
         .current_dir(cwd)
         .env("HOME", home)
         .env("UTHARNESS_HOME", home.join(".utharness"))
-        .args(args)
-        .output()
-        .expect("run utharness");
+        .args(args);
+    for (key, value) in extra_env {
+        command.env(key, value);
+    }
+    let output = command.output().expect("run utharness");
     assert!(
         output.status.success(),
         "stderr: {}",
@@ -90,6 +103,82 @@ fn skill_commands_cover_registry_lifecycle_and_local_import() {
         &["skills", "import", manifest.to_str().unwrap()],
     );
     assert!(imported.contains("imported local.example v1.0.0"));
+}
+
+#[test]
+fn termux_commands_create_no_root_paths_and_report_optional_features() {
+    let workspace = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    let prefix = tempdir().unwrap();
+    std::fs::create_dir_all(prefix.path().join("bin")).unwrap();
+    let bin = env!("CARGO_BIN_EXE_utharness");
+    let prefix_text = prefix.path().to_str().unwrap();
+    let env = [("TERMUX_VERSION", "0.118.0"), ("PREFIX", prefix_text)];
+
+    let setup = run_with_env(
+        bin,
+        workspace.path(),
+        home.path(),
+        &["termux", "setup"],
+        &env,
+    );
+    assert!(setup.contains("Termux directories initialized"));
+    assert!(home.path().join(".config/utharness").is_dir());
+    assert!(home.path().join(".local/share/utharness/skills").is_dir());
+    assert!(home.path().join(".cache/utharness").is_dir());
+
+    let info = run_with_env(
+        bin,
+        workspace.path(),
+        home.path(),
+        &["termux", "info"],
+        &env,
+    );
+    assert!(info.contains("\"platform\": \"termux\""));
+    assert!(info.contains(prefix_text));
+    let api = run_with_env(bin, workspace.path(), home.path(), &["termux", "api"], &env);
+    assert!(api.contains("optional"));
+    let permissions = run_with_env(
+        bin,
+        workspace.path(),
+        home.path(),
+        &["termux", "permissions"],
+        &env,
+    );
+    assert!(permissions.contains("Storage sandbox"));
+    let keys = run_with_env(
+        bin,
+        workspace.path(),
+        home.path(),
+        &["termux", "keys", "install"],
+        &env,
+    );
+    assert!(keys.contains("extra keys installed"));
+    assert!(home.path().join(".termux/termux.properties").is_file());
+    let setup_command = run_with_env(bin, workspace.path(), home.path(), &["setup"], &env);
+    assert!(setup_command.contains("Android / Termux"));
+    let doctor_command = run_with_env(bin, workspace.path(), home.path(), &["doctor"], &env);
+    assert!(doctor_command.contains("UTHARNESS TERMUX DOCTOR"));
+    let config = run_with_env(bin, workspace.path(), home.path(), &["config"], &env);
+    assert!(config.contains("permission_mode"));
+    let sessions = run_with_env(bin, workspace.path(), home.path(), &["sessions"], &env);
+    assert!(sessions.contains("No sessions") || sessions.contains("Terminal session"));
+    let update = run_with_env(bin, workspace.path(), home.path(), &["update"], &env);
+    assert!(update.contains("pkg update"));
+    let doctor = run_with_env(
+        bin,
+        workspace.path(),
+        home.path(),
+        &["termux", "doctor"],
+        &env,
+    );
+    assert!(doctor.contains("UTHARNESS TERMUX DOCTOR"));
+    let models = run_with_env(bin, workspace.path(), home.path(), &["models"], &env);
+    assert!(models.contains("MODELS"));
+    let mcp = run_with_env(bin, workspace.path(), home.path(), &["mcp"], &env);
+    assert!(mcp.contains("MCP"));
+    let memory = run_with_env(bin, workspace.path(), home.path(), &["memory"], &env);
+    assert!(memory.contains("MEMORY"));
 }
 
 #[test]

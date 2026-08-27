@@ -63,6 +63,49 @@ jobs:
           python -m build
           python -m twine check --strict dist/*
 
+  termux:
+    name: Termux package and CLI smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pnpm --dir ui install --frozen-lockfile
+      - run: pnpm --dir ui build
+      - run: cargo build --release
+      - name: Validate Termux package scripts and layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          for script in packages/utharness/build.sh termux/*.sh; do bash -n "$script"; done
+          TERMUX_PACKAGE_OUT="$RUNNER_TEMP/termux-package" TERMUX_ARCH=x86_64 TERMUX_RUST_BINARY="$GITHUB_WORKSPACE/target/release/utharness" TERMUX_UI_DIST="$GITHUB_WORKSPACE/ui/dist" packages/utharness/build.sh
+          deb=$(find "$RUNNER_TEMP/termux-package" -maxdepth 1 -name '*.deb' -print -quit)
+          test -n "$deb"
+          dpkg-deb --contents "$deb" | grep -F './data/data/com.termux/files/usr/bin/utharness'
+          dpkg-deb --contents "$deb" | grep -F './data/data/com.termux/files/usr/lib/utharness/dist/index.js'
+          if dpkg-deb --contents "$deb" | grep -E '^\./(usr|opt)/'; then exit 1; fi
+          sha256sum -c "$deb.sha256"
+          UTHARNESS_ALLOW_UNSIGNED=1 UTHARNESS_VERSION=0.1.0 termux/build-repository.sh "$RUNNER_TEMP/termux-package" "$RUNNER_TEMP/termux-repository"
+          test -s "$RUNNER_TEMP/termux-repository/dists/stable/Release"
+          test -s "$RUNNER_TEMP/termux-repository/dists/stable/main/binary-x86_64/Packages.gz"
+          test -f "$RUNNER_TEMP/termux-repository/UNSIGNED-LOCAL-TEST-ONLY"
+      - name: Verify Termux command surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          home="$RUNNER_TEMP/termux-home"
+          prefix="$home/prefix"
+          mkdir -p "$prefix/bin"
+          HOME="$home" PREFIX="$prefix" TERMUX_VERSION=0.118.0 UTHARNESS_HOME="$home/.local/share/utharness" target/release/utharness termux setup
+          HOME="$home" PREFIX="$prefix" TERMUX_VERSION=0.118.0 target/release/utharness termux info
+          HOME="$home" PREFIX="$prefix" TERMUX_VERSION=0.118.0 target/release/utharness termux doctor
+          HOME="$home" PREFIX="$prefix" TERMUX_VERSION=0.118.0 target/release/utharness update | grep -F 'pkg update'
+
   smoke:
     name: CLI smoke
     runs-on: ubuntu-latest

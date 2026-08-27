@@ -15,6 +15,11 @@ const runtimeSchema = z.object({
   context: z.string(),
   network: z.string(),
   projectSpecific: z.boolean(),
+  platform: z.string(),
+  androidVersion: z.string(),
+  prefix: z.string(),
+  termuxApi: z.string(),
+  storage: z.string(),
   messages: z.array(z.object({
     id: z.string(),
     role: z.enum(['uthy', 'you']),
@@ -58,24 +63,39 @@ function runtimeBinary(): string {
 }
 
 export async function loadSnapshot(cwd = process.cwd()): Promise<RuntimeSnapshot> {
-  const [branch, gitRoot, model] = await Promise.all([
+  const home = os.homedir();
+  const [branch, gitRoot, androidVersion, apiCommand] = await Promise.all([
     commandOutput('git', ['branch', '--show-current'], cwd),
     commandOutput('git', ['rev-parse', '--show-toplevel'], cwd),
-    Promise.resolve(process.env.UTHARNESS_MODEL ?? 'gpt-4o-mini')
+    commandOutput('getprop', ['ro.build.version.release'], cwd),
+    commandOutput('sh', ['-lc', 'command -v termux-battery-status'], cwd)
   ]);
+  const isTermux = Boolean(process.env.TERMUX_VERSION || process.env.PREFIX?.includes('com.termux'));
   const workspacePath = gitRoot || cwd;
-  const home = os.homedir();
   const workspace = workspacePath.startsWith(home) ? `~${workspacePath.slice(home.length)}` : workspacePath;
   const provider = process.env.UTHARNESS_PROVIDER ?? (process.env.OPENROUTER_API_KEY ? 'openrouter' : 'offline');
+  const storagePath = path.join(home, 'storage');
+  let storage = 'sandbox';
+  try {
+    await fs.access(storagePath);
+    storage = 'shared storage linked';
+  } catch {
+    // Shared storage is optional on Termux.
+  }
   const snapshot = {
     workspace,
     permission: process.env.UTHARNESS_PERMISSION ?? 'offline (default deny)',
     provider,
-    model,
+    model: process.env.UTHARNESS_MODEL ?? 'gpt-4o-mini',
     branch: branch || 'no-branch',
     context: process.env.UTHARNESS_CONTEXT ?? '128K context left',
     network: process.env.OPENROUTER_API_KEY ? 'connected' : 'offline',
     projectSpecific: Boolean(gitRoot),
+    platform: isTermux ? 'termux' : process.platform,
+    androidVersion: androidVersion || 'n/a',
+    prefix: process.env.PREFIX ?? '',
+    termuxApi: apiCommand ? 'available' : 'optional/missing',
+    storage,
     messages: sampleMessages()
   } satisfies RuntimeSnapshot;
   return runtimeSchema.parse(snapshot);

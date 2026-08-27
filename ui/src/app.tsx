@@ -3,7 +3,7 @@ import { Box, Text, useApp, useInput, useStdout } from 'ink';
 import { TextInput } from '@inkjs/ui';
 import type { FSWatcher } from 'chokidar';
 import { loadSnapshot, runSkillCommand, submitPrompt, watchRuntime } from './runtime.js';
-import { Banner, getBreakpoint, getColorMode, MessageRow, palette, PersistentHeader, PromptFrame, SkillManager, StartupTips, StatusBar, WorkspaceWarning } from './components.js';
+import { Banner, getBreakpoint, getColorMode, getTermuxBreakpoint, MessageRow, palette, PersistentHeader, PromptFrame, SkillManager, StartupTips, StatusBar, WorkspaceWarning } from './components.js';
 import type { CommandItem, Message, RuntimeSnapshot } from './types.js';
 
 const commands: CommandItem[] = [
@@ -44,15 +44,16 @@ export function App() {
 
   const columns = Math.max(40, stdout.columns ?? process.stdout.columns ?? 120);
   const rows = Math.max(12, stdout.rows ?? process.stdout.rows ?? 36);
-  const breakpoint = getBreakpoint(columns);
+  const breakpoint = snapshot?.platform === 'termux' ? getTermuxBreakpoint(columns) : getBreakpoint(columns);
   const colorMode = getColorMode();
-  const contentWidth = Math.max(28, columns - (breakpoint === 'compact' ? 2 : 8));
-  const showTips = breakpoint !== 'compact' && rows >= 28;
-  const showWarning = Boolean(snapshot && !snapshot.projectSpecific && breakpoint !== 'compact' && rows >= 24);
+  const isMobile = breakpoint === 'mobile' || breakpoint === 'compact';
+  const contentWidth = Math.max(28, columns - (isMobile ? 2 : 8));
+  const showTips = !isMobile && rows >= 28;
+  const showWarning = Boolean(snapshot && !snapshot.projectSpecific && !isMobile && rows >= 24);
   const skillManagerHeight = skillManager ? Math.min(22, 4 + skillManagerText.split(/\r?\n/).length) : 0;
-  const chromeHeight = 3 + (breakpoint === 'compact' ? 4 : 8) + (showTips ? 6 : 0) + (showWarning ? 3 : 0) + skillManagerHeight + 3 + 3;
+  const chromeHeight = 3 + (isMobile ? 4 : 8) + (showTips ? 6 : 0) + (showWarning ? 3 : 0) + skillManagerHeight + 3 + 3;
   const chatHeight = Math.max(2, rows - chromeHeight);
-  const visibleRows = Math.max(1, Math.floor(chatHeight / (breakpoint === 'compact' ? 2 : 3)));
+  const visibleRows = Math.max(1, Math.floor(chatHeight / (isMobile ? 2 : 3)));
   const slashSuggestions = useMemo(() => {
     const query = draft.startsWith('/') ? draft.toLowerCase() : '';
     return query ? commands.filter(item => item.command.startsWith(query)).slice(0, 5) : [];
@@ -215,13 +216,14 @@ export function App() {
   };
 
   const visibleMessages = messages.slice(Math.max(0, messages.length - visibleRows - scrollOffset), messages.length - scrollOffset || undefined);
-  const placeholder = breakpoint === 'compact' ? 'Type a message…' : 'Type your message or @path/to/file';
+  const placeholder = isMobile ? 'Ask UTHARNESS…' : 'Type your message or @path/to/file';
 
   return (
-    <Box flexDirection="column" width="100%" height={rows} paddingX={breakpoint === 'compact' ? 0 : 1}>
-      <PersistentHeader breakpoint={breakpoint} colorMode={colorMode} />
+          <Box flexDirection="column" width="100%" height={rows} paddingX={isMobile ? 0 : 1}>
+
+      <PersistentHeader breakpoint={breakpoint} colorMode={colorMode} platform={snapshot?.platform} />
       <Banner breakpoint={breakpoint} colorMode={colorMode} />
-      {showTips ? <StartupTips colorMode={colorMode} /> : null}
+      {showTips ? <StartupTips colorMode={colorMode} termux={snapshot?.platform === 'termux'} /> : null}
       {showWarning ? <WorkspaceWarning colorMode={colorMode} /> : null}
       {skillManager ? <SkillManager text={skillManagerLoading ? 'Loading indexed skills…' : skillManagerText} width={contentWidth} colorMode={colorMode} /> : null}
       {runtimeError ? <Text color={colorMode === 'mono' ? undefined : palette.error}>Runtime: {runtimeError}</Text> : null}

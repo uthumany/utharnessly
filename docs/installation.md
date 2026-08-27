@@ -4,6 +4,62 @@ For the shortest copyable install page, start with [`INSTALLATION.md`](../INSTAL
 
 `utharnessly` is distributed as a native Rust CLI with a bundled React/Ink terminal UI. The first public release provides signed release archives for **Linux x64, macOS x64, and Windows x64**, plus thin launchers on **npm** and **PyPI** that download and verify the matching native archive on first use. Other combinations are documented as source, remote-host, or unsupported paths rather than being presented as working installers.
 
+## Termux / Android
+
+The native Termux package is built from [`packages/utharness`](../packages/utharness), placed only in Termux’s `$PREFIX`, and distributed through the signed APT repository created by the release workflow. It does not require root. The current existing `v0.1.0` release predates the Termux repository publication, so the bootstrap below becomes live with the first signed Termux-enabled release; until then use the source workflow.
+
+```bash
+pkg update
+pkg install curl
+curl -fsSL https://uthumany.github.io/utharnessly/termux/install.sh | bash
+pkg update
+pkg install utharness
+utharness setup
+utharness
+```
+
+Termux package updates must remain package-manager-owned:
+
+```bash
+pkg update
+pkg upgrade utharness
+```
+
+The package uses only these prefix paths:
+
+```text
+$PREFIX/bin/utharness
+$PREFIX/lib/utharness
+$PREFIX/share/utharness
+```
+
+User state is never stored in the package prefix:
+
+```text
+$HOME/.config/utharness
+$HOME/.local/share/utharness
+$HOME/.cache/utharness
+```
+
+Use the built-in diagnostics and optional Android integration commands as follows:
+
+```bash
+utharness termux info
+utharness termux setup
+utharness termux doctor
+utharness termux permissions
+utharness termux keys install
+utharness termux storage enable
+utharness termux api
+utharness termux api battery
+```
+
+Termux:API is optional. The core CLI, SQLite persistence, offline planner, diagnostics, and TUI continue to work when the matching Termux:API app or package is absent. Install optional capabilities only when needed:
+
+```bash
+pkg install termux-api git openssh python
+```
+
 ## Quick start
 
 ### Release archive on Linux or macOS
@@ -75,6 +131,7 @@ The Python package is a dependency-free launcher. It uses the same release archi
 | Rush / Lerna / cnpm | **Not required** | Use the repository’s pnpm lockfile and `pnpm --dir ui ...`; do not add an orchestrator solely for compatibility claims. | No Rush/Lerna workspace or cnpm-specific distribution is maintained. |
 | Git | **Supported source path** | `git clone https://github.com/uthumany/utharnessly.git && cd utharnessly` | Requires Rust stable, Node.js 22, and pnpm to build the complete CLI/TUI. |
 | winget | **Prerequisite channel** | `winget install OpenJS.NodeJS.LTS Git.Git` | Installs prerequisites on Windows; no utharnessly winget manifest is published. Use the PowerShell installer or source build afterward. |
+| Termux APT repository | **Prepared; not included in v0.1.0** | `curl -fsSL https://uthumany.github.io/utharnessly/termux/install.sh | bash && pkg install utharness` | Requires a signed Termux repository release; no root. Until that release is published, use source build or SSH to a supported host. |
 
 ## Source installation and development
 

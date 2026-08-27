@@ -1,4 +1,4 @@
-export type Breakpoint = 'compact' | 'narrow' | 'standard' | 'wide' | 'ultra';
+export type Breakpoint = 'mobile' | 'compact' | 'narrow' | 'standard' | 'wide' | 'ultra';
 
 export type ColorMode = 'truecolor' | 'ansi256' | 'ansi16' | 'mono';
 
@@ -32,6 +32,11 @@ export type RuntimeSnapshot = {
   context: string;
   network: string;
   projectSpecific: boolean;
+  platform: string;
+  androidVersion: string;
+  prefix: string;
+  termuxApi: string;
+  storage: string;
   messages: Message[];
 };
 

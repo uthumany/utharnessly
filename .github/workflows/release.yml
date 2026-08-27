@@ -6,6 +6,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build:
@@ -66,22 +68,106 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  termux:
+    name: Build Termux package (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: aarch64
+            ndk_arch: arm64-v8a
+            rust_target: aarch64-linux-android
+          - arch: x86_64
+            ndk_arch: x86_64
+            rust_target: x86_64-linux-android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: android-actions/setup-android@v3
+      - uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26b
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+      - run: cargo install cargo-ndk --locked
+      - run: pnpm --dir ui install --frozen-lockfile
+      - run: pnpm --dir ui build
+      - name: Build Android-compatible Rust binary
+        run: cargo ndk -t ${{ matrix.ndk_arch }} -p 26 build --release --package utharness-cli
+      - name: Build and validate Termux Debian package
+        shell: bash
+        env:
+          TERMUX_ARCH: ${{ matrix.arch }}
+          TERMUX_RUST_BINARY: target/${{ matrix.rust_target }}/release/utharness
+          TERMUX_UI_DIST: ui/dist
+        run: |
+          set -euo pipefail
+          packages/utharness/build.sh
+          deb=$(find dist/termux -maxdepth 1 -name '*.deb' -print -quit)
+          test -n "$deb"
+          dpkg-deb --info "$deb"
+          dpkg-deb --contents "$deb" | grep -F '/data/data/com.termux/files/usr/bin/utharness'
+          dpkg-deb --contents "$deb" | grep -F '/data/data/com.termux/files/usr/lib/utharness/dist/index.js'
+          sha256sum -c "$deb.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: termux-${{ matrix.arch }}
+          path: dist/termux/*
+          if-no-files-found: error
+
   publish:
     name: Publish release assets
-    needs: build
+    needs: [build, termux]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          pattern: release-*
+          pattern: '*'
           path: dist
           merge-multiple: true
-      - name: Generate checksums
+      - name: Generate native checksums
         shell: bash
         run: |
           set -euo pipefail
           cd dist
           sha256sum utharnessly-* > SHA256SUMS
+      - name: Collect and sign Termux repository
+        shell: bash
+        env:
+          UTHARNESS_GPG_KEY_ID: ${{ secrets.UTHARNESS_GPG_KEY_ID }}
+          UTHARNESS_GPG_PRIVATE_KEY: ${{ secrets.UTHARNESS_GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          export UTHARNESS_VERSION="${GITHUB_REF_NAME#v}"
+          test -n "$UTHARNESS_GPG_KEY_ID" || { echo 'UTHARNESS_GPG_KEY_ID secret is required for signed Termux metadata' >&2; exit 2; }
+          test -n "$UTHARNESS_GPG_PRIVATE_KEY" || { echo 'UTHARNESS_GPG_PRIVATE_KEY secret is required for signed Termux metadata' >&2; exit 2; }
+          export GNUPGHOME="$RUNNER_TEMP/utharness-gnupg"
+          mkdir -m 700 "$GNUPGHOME"
+          printf '%s' "$UTHARNESS_GPG_PRIVATE_KEY" | gpg --batch --import
+          mkdir -p dist/termux-packages
+          find dist -path '*/utharness_*.deb' -exec cp {} dist/termux-packages/ \;
+          TERMUX_PACKAGE_INPUT=dist/termux-packages UTHARNESS_GPG_KEY_ID="$UTHARNESS_GPG_KEY_ID" termux/build-repository.sh dist/termux-packages dist/termux-repository
+          mkdir -p dist/termux-site/termux
+          cp -R dist/termux-repository/. dist/termux-site/termux/
+          cp termux/install.sh termux/install-repo.sh dist/termux-site/termux/
+          chmod +x dist/termux-site/termux/install.sh dist/termux-site/termux/install-repo.sh
+          tar -C dist -czf "dist/utharness-termux-repository-${UTHARNESS_VERSION}.tar.gz" termux-site
+          sha256sum "dist/utharness-termux-repository-${UTHARNESS_VERSION}.tar.gz" > "dist/utharness-termux-repository-${UTHARNESS_VERSION}.tar.gz.sha256"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/termux-site
+      - name: Deploy Termux repository to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
@@ -89,3 +175,7 @@ jobs:
             dist/utharnessly-*.tar.gz
             dist/utharnessly-*.zip
             dist/SHA256SUMS
+            dist/termux-repository/pool/main/utharness/*.deb
+            dist/utharness-termux-repository-*.tar.gz
+            dist/utharness-termux-repository-*.tar.gz.sha256
+            dist/termux-repository/SHA256SUMS

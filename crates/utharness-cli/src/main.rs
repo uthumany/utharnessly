@@ -16,6 +16,7 @@ use utharness_storage::Storage;
 
 mod banner;
 mod skills;
+mod termux;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -29,28 +30,34 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum CommandKind {
     Init(InitArgs),
+    Setup,
     Chat(ChatArgs),
     Run(RunArgs),
     Tui(TuiArgs),
     Autonomous(AutonomousArgs),
     Doctor,
+    Update,
+    Uninstall,
     Config {
         #[command(subcommand)]
-        action: ConfigAction,
+        action: Option<ConfigAction>,
     },
     Sessions {
         #[command(subcommand)]
-        action: SessionAction,
+        action: Option<SessionAction>,
     },
     Memory {
         #[command(subcommand)]
-        action: MemoryAction,
+        action: Option<MemoryAction>,
     },
     Checkpoint,
     Skills(SkillsArgs),
     Providers,
     Agents,
     Tools,
+    Models,
+    Mcp,
+    Termux(TermuxArgs),
 }
 
 #[derive(Args, Debug)]
@@ -107,6 +114,7 @@ enum SessionAction {
 
 #[derive(Subcommand, Debug)]
 enum MemoryAction {
+    List,
     Add {
         content: String,
         #[arg(long, default_value = "project")]
@@ -115,6 +123,49 @@ enum MemoryAction {
     Search {
         query: String,
     },
+}
+
+#[derive(Args, Debug)]
+struct TermuxArgs {
+    #[command(subcommand)]
+    action: Option<TermuxAction>,
+}
+
+#[derive(Subcommand, Debug)]
+enum TermuxAction {
+    Info,
+    Setup,
+    Api {
+        capability: Option<String>,
+        #[arg(long)]
+        value: Option<String>,
+    },
+    Keys(TermuxKeysArgs),
+    Storage(TermuxStorageArgs),
+    Permissions,
+    Doctor,
+}
+
+#[derive(Args, Debug)]
+struct TermuxKeysArgs {
+    #[command(subcommand)]
+    action: Option<TermuxKeysAction>,
+}
+
+#[derive(Subcommand, Debug)]
+enum TermuxKeysAction {
+    Install,
+}
+
+#[derive(Args, Debug)]
+struct TermuxStorageArgs {
+    #[command(subcommand)]
+    action: Option<TermuxStorageAction>,
+}
+
+#[derive(Subcommand, Debug)]
+enum TermuxStorageAction {
+    Enable,
 }
 
 #[derive(Args, Debug)]
@@ -249,16 +300,20 @@ fn main() -> Result<()> {
             );
             Ok(())
         }
+        Some(CommandKind::Setup) => setup(),
         Some(CommandKind::Chat(args)) => chat(args),
         Some(CommandKind::Run(args)) => run_command(args),
         Some(CommandKind::Tui(args)) => launch_tui(args.headless),
         Some(CommandKind::Autonomous(args)) => autonomous(args),
         Some(CommandKind::Doctor) => doctor(),
-        Some(CommandKind::Config {
-            action: ConfigAction::Show,
-        }) => config_show(),
-        Some(CommandKind::Sessions { action }) => sessions(action),
-        Some(CommandKind::Memory { action }) => memory(action),
+        Some(CommandKind::Update) => update(),
+        Some(CommandKind::Uninstall) => uninstall(),
+        Some(CommandKind::Config { action }) => {
+            let _ = action.unwrap_or(ConfigAction::Show);
+            config_show()
+        }
+        Some(CommandKind::Sessions { action }) => sessions(action.unwrap_or(SessionAction::List)),
+        Some(CommandKind::Memory { action }) => memory(action.unwrap_or(MemoryAction::List)),
         Some(CommandKind::Checkpoint) => checkpoint(),
         Some(CommandKind::Skills(args)) => skills_command(args),
         Some(CommandKind::Providers) => {
@@ -273,6 +328,9 @@ fn main() -> Result<()> {
             println!("TOOLS\n✓ read_file       SAFE\n✓ list_directory  SAFE\n! write_file      ASK\n! shell           ASK\n! browser_open    ASK\n✓ git_diff        SAFE");
             Ok(())
         }
+        Some(CommandKind::Models) => models(),
+        Some(CommandKind::Mcp) => mcp(),
+        Some(CommandKind::Termux(args)) => termux_command(args),
     }
 }
 
@@ -708,6 +766,11 @@ fn sessions(action: SessionAction) -> Result<()> {
 fn memory(action: MemoryAction) -> Result<()> {
     let app = App::open(".")?;
     match action {
+        MemoryAction::List => {
+            println!("MEMORY");
+            println!("workspace: {}", app.workspace.canonical_path);
+            println!("Use `utharness memory search <query>` to search persisted records.");
+        }
         MemoryAction::Add { content, scope } => {
             let memory = app.storage.add_memory(
                 Some(app.workspace.id),
@@ -760,8 +823,155 @@ fn doctor() -> Result<()> {
     );
     println!("✓ provider      offline planner available");
     println!("✓ skills        built-in registry available");
+    if termux::is_termux() {
+        print_termux_doctor();
+    }
     println!("✓ diagnostics   clean");
     Ok(())
+}
+
+fn setup() -> Result<()> {
+    let app = App::open(".")?;
+    println!("UTHARNESS SETUP");
+    println!("workspace: {}", app.workspace.canonical_path);
+    if termux::is_termux() {
+        let locations = termux::setup()?;
+        println!("platform:  Android / Termux");
+        println!("config:    {}", locations.config.display());
+        println!("data:      {}", locations.data.display());
+        println!("cache:     {}", locations.cache.display());
+        println!("✓ Termux user directories initialized without root");
+    } else {
+        println!("platform:  {}", env::consts::OS);
+        println!("✓ workspace database initialized");
+    }
+    println!("next: utharness doctor");
+    Ok(())
+}
+
+fn models() -> Result<()> {
+    println!("MODELS");
+    println!("offline/gpt-4o-mini       local fallback");
+    println!("OpenRouter/Qwen3-Coder   configure provider credentials to enable");
+    if let Ok(model) = env::var("UTHARNESS_MODEL") {
+        println!("active: {model}");
+    }
+    Ok(())
+}
+
+fn mcp() -> Result<()> {
+    let paths = termux::paths();
+    let mcp_dir = paths.data.join("mcp");
+    fs::create_dir_all(&mcp_dir)?;
+    println!("MCP");
+    println!("registry: {}", mcp_dir.display());
+    println!("status:   configuration directory ready; no MCP server is enabled by default");
+    println!("safety:   external MCP tools require explicit configuration and permission review");
+    Ok(())
+}
+
+fn update() -> Result<()> {
+    println!("UTHARNESS UPDATE");
+    println!("{}", termux::update_guidance());
+    Ok(())
+}
+
+fn uninstall() -> Result<()> {
+    println!("UTHARNESS UNINSTALL");
+    if termux::is_termux() {
+        let paths = termux::paths();
+        println!("Run: pkg uninstall utharness");
+        println!("User data is retained by default:");
+        println!("  {}", paths.config.display());
+        println!("  {}", paths.data.display());
+        println!("  {}", paths.cache.display());
+        println!(
+            "Remove user data only when intended: rm -rf {} {} {}",
+            paths.config.display(),
+            paths.data.display(),
+            paths.cache.display()
+        );
+    } else {
+        println!(
+            "Use the package manager that installed utharnessly, or remove the source checkout."
+        );
+    }
+    Ok(())
+}
+
+fn termux_command(args: TermuxArgs) -> Result<()> {
+    match args.action.unwrap_or(TermuxAction::Info) {
+        TermuxAction::Info => println!("{}", serde_json::to_string_pretty(&termux::info()?)?),
+        TermuxAction::Setup => {
+            let locations = termux::setup()?;
+            println!("Termux directories initialized");
+            println!("prefix: {}", locations.prefix.display());
+            println!("config: {}", locations.config.display());
+            println!("data:   {}", locations.data.display());
+            println!("cache:  {}", locations.cache.display());
+        }
+        TermuxAction::Api { capability, value } => {
+            println!(
+                "{}",
+                termux::api_status_or_call(capability.as_deref(), value.as_deref())?
+            );
+        }
+        TermuxAction::Keys(args) => match args.action.unwrap_or(TermuxKeysAction::Install) {
+            TermuxKeysAction::Install => println!(
+                "extra keys installed at {}",
+                termux::install_keys()?.display()
+            ),
+        },
+        TermuxAction::Storage(args) => match args.action.unwrap_or(TermuxStorageAction::Enable) {
+            TermuxStorageAction::Enable => {
+                termux::enable_storage()?;
+                println!("Termux shared storage setup requested");
+            }
+        },
+        TermuxAction::Permissions => {
+            for item in termux::checks().into_iter().filter(|item| {
+                matches!(
+                    item.name.as_str(),
+                    "Shared storage" | "Termux:API" | "Storage sandbox"
+                )
+            }) {
+                println!(
+                    "{} {} · {}",
+                    if item.status == "pass" { "✓" } else { "!" },
+                    item.name,
+                    item.detail
+                );
+                if let Some(repair) = item.repair {
+                    println!("  repair: {repair}");
+                }
+            }
+        }
+        TermuxAction::Doctor => print_termux_doctor(),
+    }
+    Ok(())
+}
+
+fn print_termux_doctor() {
+    println!("UTHARNESS TERMUX DOCTOR");
+    let checks = termux::checks();
+    let mut warnings = 0;
+    for item in checks {
+        let symbol = if item.status == "pass" {
+            "✓"
+        } else {
+            warnings += 1;
+            "!"
+        };
+        println!("{symbol} {:<18} {}", item.name, item.detail);
+        if let Some(repair) = item.repair {
+            println!("  repair: {repair}");
+        }
+    }
+    if warnings == 0 {
+        println!("\nSystem ready.");
+    } else {
+        println!("\n{warnings} warning(s); core UTHARNESS remains usable where optional capabilities are unavailable.");
+    }
 }
 
 fn config_show() -> Result<()> {
@@ -789,17 +999,25 @@ fn launch_tui(headless: bool) -> Result<()> {
         return Ok(());
     }
 
-    let repository_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()?;
+    let repository_root = env::var_os("UTHARNESS_SOURCE_ROOT")
+        .map(PathBuf::from)
+        .or_else(|| {
+            let candidate = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+            candidate.is_dir().then_some(candidate)
+        })
+        .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
     let executable_directory = env::current_exe()
         .ok()
         .and_then(|path| path.parent().map(Path::to_path_buf));
     let repository_ui_directory = repository_root.join("ui");
-    let installed_ui_directories = executable_directory
+    let mut installed_ui_directories = executable_directory
         .clone()
         .map(|path| vec![path.join("ui"), path.join("utharnessly-ui")])
         .unwrap_or_default();
+    if let Some(prefix) = env::var_os("PREFIX").map(PathBuf::from) {
+        installed_ui_directories.push(prefix.join("lib").join("utharness"));
+        installed_ui_directories.push(prefix.join("share").join("utharness"));
+    }
     let ui_directory = installed_ui_directories
         .into_iter()
         .find(|path| path.join("dist/index.js").is_file())
