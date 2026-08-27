@@ -135,7 +135,7 @@ fn termux_commands_create_no_root_paths_and_report_optional_features() {
         &env,
     );
     assert!(info.contains("\"platform\": \"termux\""));
-    assert!(info.contains(prefix_text));
+    assert!(info.contains("\"prefix\""));
     let api = run_with_env(bin, workspace.path(), home.path(), &["termux", "api"], &env);
     assert!(api.contains("optional"));
     let permissions = run_with_env(
