@@ -1,4 +1,6 @@
+use regex::{Captures, Regex};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use utharness_core::{PermissionDecision, PermissionMode, ToolRequest};
 
 #[derive(Clone, Debug)]
@@ -79,29 +81,27 @@ impl Policy {
     }
 
     pub fn redact(text: &str) -> String {
-        let mut output = text.to_string();
-        for prefix in [
-            "OPENAI_API_KEY=",
-            "ANTHROPIC_API_KEY=",
-            "API_KEY=",
-            "TOKEN=",
-            "SECRET=",
-        ] {
-            let mut search_from = 0;
-            while let Some(relative_start) = output[search_from..].find(prefix) {
-                let start = search_from + relative_start;
-                let end = output[start + prefix.len()..]
-                    .find([' ', '\n', '\r'])
-                    .map(|i| start + prefix.len() + i)
-                    .unwrap_or(output.len());
-                output.replace_range(start + prefix.len()..end, "[REDACTED]");
-                search_from = start + prefix.len() + "[REDACTED]".len();
-                if search_from >= output.len() {
-                    break;
-                }
-            }
-        }
-        output
+        static ASSIGNMENT: OnceLock<Regex> = OnceLock::new();
+        static BEARER: OnceLock<Regex> = OnceLock::new();
+        static TOKEN: OnceLock<Regex> = OnceLock::new();
+
+        let assignment = ASSIGNMENT.get_or_init(|| {
+            Regex::new(r#"(?i)\b([a-z0-9_]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|secret|password|passwd|credential)[a-z0-9_-]*\s*[:=]\s*)('[^']*'|\"[^\"]*\"|[^\s,;}&]+)"#).expect("valid assignment redaction regex")
+        });
+        let bearer = BEARER.get_or_init(|| {
+            Regex::new(r"(?i)\b(bearer\s+)[a-z0-9._~+/-]+=*").expect("valid bearer redaction regex")
+        });
+        let token = TOKEN.get_or_init(|| {
+            Regex::new(r"\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{16,}|github_pat_[A-Za-z0-9_]{16,}|xox[baprs]-[A-Za-z0-9-]{16,})\b").expect("valid token redaction regex")
+        });
+
+        let output = assignment.replace_all(text, |caps: &Captures<'_>| {
+            format!("{}[REDACTED]", &caps[1])
+        });
+        let output = bearer.replace_all(&output, |caps: &Captures<'_>| {
+            format!("{}[REDACTED]", &caps[1])
+        });
+        token.replace_all(&output, "[REDACTED]").into_owned()
     }
 }
 
@@ -134,5 +134,32 @@ mod tests {
     #[test]
     fn redacts_common_secret_assignments() {
         assert_eq!(Policy::redact("API_KEY=abc123 ok"), "API_KEY=[REDACTED] ok");
+        assert_eq!(
+            Policy::redact("password: \"hunter2\""),
+            "password: [REDACTED]"
+        );
+        assert_eq!(
+            Policy::redact("Authorization: Bearer abc.def-123"),
+            "Authorization: Bearer [REDACTED]"
+        );
+        assert_eq!(
+            Policy::redact("token=abc, next=true"),
+            "token=[REDACTED], next=true"
+        );
+        assert_eq!(
+            Policy::redact("github_pat_1234567890abcdefghijkl"),
+            "[REDACTED]"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlink_that_escapes_workspace() {
+        use std::os::unix::fs::symlink;
+        let workspace = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        symlink(outside.path(), workspace.path().join("escape")).unwrap();
+        let policy = Policy::safe(workspace.path());
+        assert!(policy.validate_path(Path::new("escape")).is_err());
     }
 }

@@ -2,8 +2,8 @@
 
 **Date:** 2026-08-27
 **Repository:** `uthumany/utharnessly`
-**Source QA target:** 0.2.7
-**Published release:** v0.2.7
+**Source QA target:** 0.2.8
+**Published release:** v0.2.8
 
 Status values are **Passed**, **Partial**, **Unverified**, or **Unsupported**. Partial and unverified combinations are intentionally not described as working.
 
@@ -11,7 +11,7 @@ Status values are **Passed**, **Partial**, **Unverified**, or **Unsupported**. P
 
 | Platform/runtime | Native artifact | Installer path | Tested environment | Result | Evidence / notes |
 |---|---|---|---|---|---|
-| Linux x64 | Yes | curl, archive, NPM, PyPI, source | Linux sandbox and Ubuntu hosted CI | Passed | Rust/UI/CLI/package tests and live v0.2.7 archive verification. |
+| Linux x64 | Yes | curl, archive, NPM, PyPI, source | Linux sandbox and Ubuntu hosted CI | Passed | Rust/UI/CLI/package tests and live v0.2.8 archive verification. |
 | macOS x64 | Yes | archive, NPM, PyPI, source | macOS hosted CI | Passed | Hosted build, lint, test, and package workflow. |
 | Windows x64 | Yes | PowerShell, archive, NPM, PyPI, source | Windows hosted CI | Passed | Hosted build, lint, test, and package workflow. |
 | Android Termux aarch64 | Yes | Signed Pages APT repository | GitHub-hosted Android cross-build; no device | Partial | Binary/package/repository built and verified; physical Termux install pending. |
@@ -47,12 +47,12 @@ Status values are **Passed**, **Partial**, **Unverified**, or **Unsupported**. P
 |---|---|---|---|
 | curl POSIX installer | Linux/macOS x64 | Passed in local/hosted checks | Native archive and checksum flow; macOS local execution unavailable. |
 | PowerShell installer | Windows x64 | Passed in hosted workflow | Native Windows shell not available locally. |
-| npm / npx / pnpm / pnpx | Supported native release targets | Source package 0.2.7 clean install passed; NPM 0.2.7 live install passed | NPM launcher downloads, verifies, caches, and forwards. |
+| npm / npx / pnpm / pnpx | Supported native release targets | Source package 0.2.8 clean install passed; NPM 0.2.8 live install passed | NPM launcher downloads, verifies, caches, and forwards. |
 | Bun / bunx | Launcher compatibility | Partial | Documentation-only compatibility class; Bun runtime not installed in sandbox. |
-| PyPI / pip / pipx / python -m | Supported native release targets | Source wheel/sdist clean install passed; PyPI 0.2.7 canonical-index install passed | Python unittest, build, local virtualenv install, and version checks passed. |
+| PyPI / pip / pipx / python -m | Supported native release targets | Source wheel/sdist clean install passed; PyPI 0.2.8 canonical-index install passed | Python unittest, build, local virtualenv install, and version checks passed. |
 | uv / uvx | Python launcher path | Partial | Manifest supports it; uv-specific installation not executed in this environment. |
 | Cargo | Source/native CLI | Passed for build; complete UI install requires separate UI build | `cargo build --release`; bare cargo install is not advertised as complete TUI packaging. |
-| Termux APT | Android aarch64/x86_64 | Repository verified; device install pending | v0.2.7 live Pages repository signatures, indexes, packages, and checksums passed. |
+| Termux APT | Android aarch64/x86_64 | Repository verified; device install pending | v0.2.8 live Pages repository signatures, indexes, packages, and checksums passed. |
 | Homebrew | No maintained formula | Unsupported product channel | Use curl/archive or source workflow. |
 | apt | No Debian repository | Unsupported product channel | Use curl/archive or source workflow; Termux APT is separate. |
 | Nix | No flake/derivation | Source-only | Use Rust/Node/pnpm source workflow. |
@@ -78,4 +78,4 @@ Status values are **Passed**, **Partial**, **Unverified**, or **Unsupported**. P
 
 ## Release status
 
-The published v0.2.7 native release, signed Termux repository, NPM package, and PyPI package are available and verified from public endpoints. No critical or high-severity defect is currently reproducible in the tested environments. The principal remaining risk is direct device and restricted-platform validation.
+The published v0.2.8 native release, signed Termux repository, NPM package, and PyPI package are available and verified from public endpoints. No critical or high-severity defect is currently reproducible in the tested environments. The principal remaining risk is direct device and restricted-platform validation.

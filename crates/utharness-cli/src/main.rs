@@ -9,12 +9,13 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-use utharness_core::{MessageRole, PermissionMode};
+use utharness_core::MessageRole;
 use utharness_provider::{ChatMessage, OpenRouter};
 use utharness_security::Policy;
 use utharness_storage::Storage;
 
 mod banner;
+mod execution;
 mod skills;
 mod termux;
 
@@ -690,50 +691,7 @@ fn execute_autonomous_step(policy: &Policy, root: &Path, step: &AgentStep) -> Re
 }
 
 fn run_command(args: RunArgs) -> Result<()> {
-    let root = fs::canonicalize(&args.workspace)?;
-    let policy = if args.allow {
-        Policy {
-            mode: PermissionMode::Trusted,
-            workspace: root.clone(),
-            allow_network: false,
-            allow_shell: true,
-        }
-    } else {
-        Policy::safe(root.clone())
-    };
-    let request = utharness_core::ToolRequest {
-        tool: "shell".into(),
-        target: Some(args.command.clone()),
-        arguments: json!({"cwd": root}),
-    };
-    if policy.evaluate(&request) != utharness_core::PermissionDecision::Allow {
-        println!("Permission required: shell execution is blocked in SAFE mode.");
-        println!(
-            "Re-run with `--allow` after reviewing the command: {}",
-            Policy::redact(&args.command)
-        );
-        anyhow::bail!("tool denied by permission policy")
-    }
-    let lower = args.command.to_ascii_lowercase();
-    for denied in ["rm -rf", "sudo ", "mkfs", "shutdown", ":(){"] {
-        if lower.contains(denied) {
-            anyhow::bail!("command denied by safety denylist: {denied}");
-        }
-    }
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg(&args.command)
-        .current_dir(&root)
-        .output()?;
-    let stdout = Policy::redact(&String::from_utf8_lossy(&output.stdout));
-    let stderr = Policy::redact(&String::from_utf8_lossy(&output.stderr));
-    print!("{}", stdout);
-    eprint!("{}", stderr);
-    if !output.status.success() {
-        anyhow::bail!("command exited with {}", output.status);
-    }
-    println!("\n[exit 0]");
-    Ok(())
+    execution::run_shell(&args.workspace, &args.command, args.allow)
 }
 
 fn sessions(action: SessionAction) -> Result<()> {

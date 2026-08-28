@@ -6,7 +6,7 @@ For the shortest copyable install page, start with [`INSTALLATION.md`](../INSTAL
 
 ## Termux / Android
 
-The native Termux package is built from [`packages/utharness`](../packages/utharness), placed only in Termux’s `$PREFIX`, and distributed through the live signed APT repository published at v0.2.7. It does not require root. The package and metadata are verified from the public Pages endpoints; physical-device and Android-version-specific behavior remains unverified in this Linux-only QA environment.
+The native Termux package is built from [`packages/utharness`](../packages/utharness), placed only in Termux’s `$PREFIX`, and distributed through the live signed APT repository published at v0.2.8. It does not require root. The package and metadata are verified from the public Pages endpoints; physical-device and Android-version-specific behavior remains unverified in this Linux-only QA environment.
 
 ```bash
 pkg update
@@ -179,7 +179,7 @@ To uninstall the npm launcher, run `npm uninstall --global utharnessly` and remo
 | Windows Terminal, WezTerm, Alacritty, Tabby, Cmder | **Supported rendering class** | Pair with the Windows x64 release or source workflow; Windows-hosted CI validates the CLI build, not every emulator. |
 | Kitty, WezTerm, Alacritty, Ghostty, Tilix on Linux | **Supported rendering class** | Linux PTY screenshots and terminal smoke tests were run on Linux; emulator-specific glyph differences remain possible. |
 | Ghostty, iTerm2, Warp, WezTerm, Kitty on macOS | **Supported rendering class** | Use the macOS x64 release or source workflow; hosted CI validates macOS builds. |
-| Termux | **Supported package path; device validation pending** | Use the signed v0.2.7 repository. Real terminal behavior, Android-version compatibility, and Termux:API execution still require device testing. |
+| Termux | **Supported package path; device validation pending** | Use the signed v0.2.8 repository. Real terminal behavior, Android-version compatibility, and Termux:API execution still require device testing. |
 | Termius, ConnectBot, TermAI, Moshi | **Remote-client workflow** | These are SSH/client environments, not independently tested native build targets. |
 | Blink Shell, Secure ShellFish | **Remote-client workflow** | Connect to a supported Linux/macOS host. |
 | a-Shell, iSH | **Unsupported local native target** | Use SSH or a remote/container host. |

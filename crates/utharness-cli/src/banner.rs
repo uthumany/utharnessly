@@ -131,6 +131,10 @@ pub fn animation_enabled() -> bool {
 
 pub fn render_banner(width: u16, version: &str, ansi: bool) -> String {
     let mode = mode_for_width(width);
+    render_banner_in_mode(width, version, ansi, mode)
+}
+
+fn render_banner_in_mode(width: u16, version: &str, ansi: bool, mode: BannerMode) -> String {
     let theme = BannerTheme::from_environment();
     let mut lines: Vec<(String, Color)> = Vec::new();
     match mode {
@@ -323,7 +327,7 @@ mod tests {
 
     #[test]
     fn renders_uthy_unicode_art_on_wide_terminal() {
-        let output = render_banner(120, "0.1.0", false);
+        let output = render_banner_in_mode(120, "0.1.0", false, BannerMode::Unicode);
         assert!(output.contains(UNICODE_BANNER[0]));
         assert!(output.contains("U T H Y"));
         assert!(output.contains("AGENT TERMINAL"));
@@ -334,14 +338,14 @@ mod tests {
 
     #[test]
     fn falls_back_to_ascii_on_medium_terminal() {
-        let output = render_banner(70, "0.1.0", false);
+        let output = render_banner_in_mode(70, "0.1.0", false, BannerMode::Ascii);
         assert!(output.contains(ASCII_BANNER[0]));
         assert!(!output.contains(UNICODE_BANNER[0]));
     }
 
     #[test]
     fn uses_compact_mode_for_narrow_terminal() {
-        let output = render_banner(40, "0.1.0", false);
+        let output = render_banner_in_mode(40, "0.1.0", false, BannerMode::Compact);
         assert!(output.contains("UTHY"));
         assert!(output.contains("AGENT TERMINAL"));
         assert!(!output.contains(UNICODE_BANNER[0]));
@@ -349,7 +353,7 @@ mod tests {
 
     #[test]
     fn ansi_output_contains_gradient_color_sequences() {
-        let output = render_banner(120, "0.1.0", true);
+        let output = render_banner_in_mode(120, "0.1.0", true, BannerMode::Unicode);
         assert!(output.contains("\u{1b}[38;2;255;222;72m"));
         assert!(output.contains("\u{1b}[38;2;247;190;202m"));
         assert!(output.contains("\u{1b}[0m"));

@@ -1,6 +1,6 @@
 # UTHARNESS Feature Inventory
 
-**QA target:** published source and package line 0.2.7.
+**QA target:** published source and package line 0.2.8.
 
 This inventory describes implemented behavior only. A platform is marked tested only when the corresponding runtime or CI environment actually executed it.
 
@@ -44,7 +44,7 @@ This inventory describes implemented behavior only. A platform is marked tested 
 
 | Feature | Purpose and flow | Commands/configuration | Dependencies and platforms | Failure behavior and limits | Test status |
 |---|---|---|---|---|---|
-| Signed APT repository | Publishes Android `aarch64` and `x86_64` packages, `Packages` indexes, `Release`, `InRelease`, `Release.gpg`, public key, and repository checksums to GitHub Pages. | `curl -fsSL https://uthumany.github.io/utharnessly/termux/install.sh | bash`; then `pkg install utharness`. | Termux package manager, curl, signed repository key; no root. | Missing signing secrets fail the release workflow; unsigned metadata is local-test-only. | v0.2.7 live endpoints were verified with GPG signatures, package metadata, and checksums. |
+| Signed APT repository | Publishes Android `aarch64` and `x86_64` packages, `Packages` indexes, `Release`, `InRelease`, `Release.gpg`, public key, and repository checksums to GitHub Pages. | `curl -fsSL https://uthumany.github.io/utharnessly/termux/install.sh | bash`; then `pkg install utharness`. | Termux package manager, curl, signed repository key; no root. | Missing signing secrets fail the release workflow; unsigned metadata is local-test-only. | v0.2.8 live endpoints were verified with GPG signatures, package metadata, and checksums. |
 | Prefix package layout | Installs only `$PREFIX/bin/utharness`, `$PREFIX/lib/utharness`, and `$PREFIX/share/utharness`; user state stays under the documented `$HOME` paths. | `pkg upgrade utharness`, `pkg uninstall utharness`. | Android/Termux package payload. | Maintainer scripts preserve user data; internal updater does not overwrite package-managed files. | Host layout and CI Android builds passed; real Termux install and uninstall remain pending. |
 | Optional Termux:API | Discovers and guards battery, clipboard, notification, device, TTS, speech, Wi-Fi, storage, sharing, vibration, and dialog commands. | `utharness termux api [capability]`, `pkg install termux-api`. | Optional Termux:API package/app. | Missing API commands produce an optional/unavailable result; core runtime continues. | Missing/present fake-command branches passed; real Android app integration pending. |
 
@@ -52,9 +52,9 @@ This inventory describes implemented behavior only. A platform is marked tested 
 
 | Feature | Purpose and flow | Commands/configuration | Dependencies and platforms | Failure behavior and limits | Test status |
 |---|---|---|---|---|---|
-| NPM launcher | Downloads the matching native release archive on first use, verifies `SHA256SUMS`, caches it, and forwards arguments. | `npm install -g utharnessly`, `npx utharnessly`, `pnpm add -g utharnessly`; aliases `utharnessly` and `utharness`. | Node.js 18+ launcher; native release currently Linux x64, macOS x64, Windows x64. | Unsupported architecture and download/checksum/extraction errors are explicit. | Local pack/install/version checks passed at source version 0.2.7; NPM 0.2.7 live installation and metadata verification passed. |
-| PyPI launcher | Mirrors the NPM launcher through a dependency-free Python entry point and checksum-verified cache. | `python -m pip install utharnessly`, `pipx`, `uv`, `uvx`. | Python 3.9+ launcher; native release target must match. | Unsupported target and network/checksum failures are explicit; uninstall prints cache cleanup. | Local wheel/sdist install and version checks passed at source version 0.2.7; PyPI 0.2.7 live installation and metadata verification passed against the canonical index. |
-| Shell/PowerShell installers | Select release archive by OS/architecture, download checksums, install to a user path, and report PATH instructions. | `packaging/install.sh`; `packaging/install.ps1`. | curl/tar/sha256sum or PowerShell; supported native targets only. | No fabricated ARM/iOS/FreeBSD package; unsupported targets receive source/remote guidance. | Script syntax and live v0.2.7 release verification passed; fresh native shell install on every OS is not available here. |
+| NPM launcher | Downloads the matching native release archive on first use, verifies `SHA256SUMS`, caches it, and forwards arguments. | `npm install -g utharnessly`, `npx utharnessly`, `pnpm add -g utharnessly`; aliases `utharnessly` and `utharness`. | Node.js 18+ launcher; native release currently Linux x64, macOS x64, Windows x64. | Unsupported architecture and download/checksum/extraction errors are explicit. | Local pack/install/version checks passed at source version 0.2.8; NPM 0.2.8 live installation and metadata verification passed. |
+| PyPI launcher | Mirrors the NPM launcher through a dependency-free Python entry point and checksum-verified cache. | `python -m pip install utharnessly`, `pipx`, `uv`, `uvx`. | Python 3.9+ launcher; native release target must match. | Unsupported target and network/checksum failures are explicit; uninstall prints cache cleanup. | Local wheel/sdist install and version checks passed at source version 0.2.8; PyPI 0.2.8 live installation and metadata verification passed against the canonical index. |
+| Shell/PowerShell installers | Select release archive by OS/architecture, download checksums, install to a user path, and report PATH instructions. | `packaging/install.sh`; `packaging/install.ps1`. | curl/tar/sha256sum or PowerShell; supported native targets only. | No fabricated ARM/iOS/FreeBSD package; unsupported targets receive source/remote guidance. | Script syntax and live v0.2.8 release verification passed; fresh native shell install on every OS is not available here. |
 
 ## Cross-platform support boundary
 
