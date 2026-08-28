@@ -86,7 +86,7 @@ impl Policy {
         static TOKEN: OnceLock<Regex> = OnceLock::new();
 
         let assignment = ASSIGNMENT.get_or_init(|| {
-            Regex::new(r#"(?i)\b([a-z0-9_]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|secret|password|passwd|credential)[a-z0-9_-]*\s*[:=]\s*)('[^']*'|\"[^\"]*\"|[^\s,;}&]+)"#).expect("valid assignment redaction regex")
+            Regex::new(r#"(?i)\b([a-z0-9_]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|token|secret|password|passwd|credential)[a-z0-9_-]*\s*[:=]\s*)('[^']*'|\"[^\"]*\"|[^\s,;}&]+)"#).expect("valid assignment redaction regex")
         });
         let bearer = BEARER.get_or_init(|| {
             Regex::new(r"(?i)\b(bearer\s+)[a-z0-9._~+/-]+=*").expect("valid bearer redaction regex")
