@@ -1,4 +1,8 @@
-use std::process::Command;
+use std::{
+    io::{Read, Write},
+    net::TcpListener,
+    process::Command,
+};
 use tempfile::tempdir;
 
 fn run(bin: &str, cwd: &std::path::Path, home: &std::path::Path, args: &[&str]) -> String {
@@ -13,6 +17,20 @@ fn run_with_env(
     extra_env: &[(&str, &str)],
 ) -> String {
     let mut command = Command::new(bin);
+    for key in [
+        "UTHARNESS_PROVIDER",
+        "UTHARNESS_PROVIDER_URL",
+        "UTHARNESS_MODEL",
+        "UTHARNESS_API_KEY",
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+        "GROQ_API_KEY",
+        "TOGETHER_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "FIREWORKS_API_KEY",
+    ] {
+        command.env_remove(key);
+    }
     command
         .current_dir(cwd)
         .env("HOME", home)
@@ -240,4 +258,76 @@ fn cli_persists_workspace_session_memory_and_doctor() {
 
     let doctor = run(bin, workspace.path(), home.path(), &["doctor"]);
     assert!(doctor.contains("✓ diagnostics   clean"));
+}
+
+#[test]
+fn provider_and_agent_commands_report_real_runtime_state_without_secrets() {
+    let workspace = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    let bin = env!("CARGO_BIN_EXE_utharness");
+
+    let providers = run(bin, workspace.path(), home.path(), &["providers", "list"]);
+    assert!(providers.contains("openrouter"));
+    assert!(providers.contains("ollama"));
+    assert!(!providers.contains("test-secret"));
+
+    let provider_env = run(bin, workspace.path(), home.path(), &["providers", "env"]);
+    assert!(provider_env.contains("GROQ_API_KEY"));
+    assert!(provider_env.contains("never persisted"));
+
+    let agents = run(bin, workspace.path(), home.path(), &["agents", "list"]);
+    assert!(agents.contains("Uthy"));
+    assert!(agents.contains("SAFE read-only"));
+}
+
+#[test]
+fn chat_streams_from_an_openai_compatible_gateway_and_persists_the_result() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = std::thread::spawn(move || {
+        let (mut socket, _) = listener.accept().unwrap();
+        let mut request = [0_u8; 8192];
+        let read = socket.read(&mut request).unwrap();
+        let request = String::from_utf8_lossy(&request[..read]);
+        assert!(request.contains("POST /v1/chat/completions"));
+        assert!(request
+            .to_ascii_lowercase()
+            .contains("authorization: bearer test-secret"));
+        let body = "data: {\"choices\":[{\"delta\":{\"content\":\"live \"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"response\"}}]}\n\ndata: [DONE]\n\n";
+        write!(
+            socket,
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        )
+        .unwrap();
+    });
+
+    let workspace = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    let endpoint = format!("http://{address}/v1");
+    let output = run_with_env(
+        env!("CARGO_BIN_EXE_utharness"),
+        workspace.path(),
+        home.path(),
+        &["chat", "hello gateway"],
+        &[
+            ("UTHARNESS_PROVIDER", "custom"),
+            ("UTHARNESS_PROVIDER_URL", &endpoint),
+            ("UTHARNESS_MODEL", "fixture-model"),
+            ("UTHARNESS_API_KEY", "test-secret"),
+        ],
+    );
+    server.join().unwrap();
+    assert!(output.contains("Uthy · custom/fixture-model"));
+    assert!(output.contains("live response"));
+    assert!(!output.contains("test-secret"));
+
+    let sessions = run(
+        env!("CARGO_BIN_EXE_utharness"),
+        workspace.path(),
+        home.path(),
+        &["sessions", "list"],
+    );
+    assert!(sessions.contains("Terminal session"));
 }

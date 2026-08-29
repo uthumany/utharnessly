@@ -4,6 +4,18 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Provider-neutral OpenAI-compatible gateway for OpenRouter, OpenAI, Groq, Together, DeepSeek, Fireworks, Ollama, and custom endpoints.
+- Real-time SSE token streaming in `utharness chat`, provider health checks, environment setup output, and automatic provider selection from supported credential variables.
+- Working `agents list` and `agents run` commands backed by the existing bounded SAFE inspection engine.
+- Local mock-gateway unit and process-level integration tests covering stream ordering, authorization, persistence, and secret-safe output.
+
+### Security
+
+- Provider credentials remain process-environment-only and are never written to SQLite or printed by status commands.
+- Plain HTTP provider URLs are rejected except for loopback development endpoints; rejected API response bodies are not echoed.
+
 ## [0.2.9] — 2026-08-29
 
 ### Added

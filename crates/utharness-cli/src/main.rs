@@ -10,7 +10,9 @@ use std::{
     process::Command,
 };
 use utharness_core::MessageRole;
-use utharness_provider::{ChatMessage, OpenRouter};
+use utharness_provider::{
+    has_provider_configuration, supported_providers, ChatMessage, Gateway, ProviderKind,
+};
 use utharness_security::Policy;
 use utharness_storage::Storage;
 
@@ -53,8 +55,8 @@ enum CommandKind {
     },
     Checkpoint,
     Skills(SkillsArgs),
-    Providers,
-    Agents,
+    Providers(ProviderArgs),
+    Agents(AgentArgs),
     Tools,
     Models,
     Mcp,
@@ -97,6 +99,40 @@ struct AutonomousArgs {
     max_steps: usize,
     #[arg(long, default_value = ".")]
     workspace: PathBuf,
+}
+
+#[derive(Args, Debug)]
+struct ProviderArgs {
+    #[command(subcommand)]
+    action: Option<ProviderAction>,
+}
+
+#[derive(Subcommand, Debug)]
+enum ProviderAction {
+    List,
+    Test {
+        #[arg(default_value = "auto")]
+        provider: String,
+    },
+    Env,
+}
+
+#[derive(Args, Debug)]
+struct AgentArgs {
+    #[command(subcommand)]
+    action: Option<AgentAction>,
+}
+
+#[derive(Subcommand, Debug)]
+enum AgentAction {
+    List,
+    Run {
+        prompt: String,
+        #[arg(long, default_value_t = 3)]
+        max_steps: usize,
+        #[arg(long, default_value = ".")]
+        workspace: PathBuf,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -317,14 +353,10 @@ fn main() -> Result<()> {
         Some(CommandKind::Memory { action }) => memory(action.unwrap_or(MemoryAction::List)),
         Some(CommandKind::Checkpoint) => checkpoint(),
         Some(CommandKind::Skills(args)) => skills_command(args),
-        Some(CommandKind::Providers) => {
-            println!("PROVIDERS\nlocal / offline planner\nOpenAI-compatible / configure with UTHARNESS_PROVIDER_URL\nOllama / local model route");
-            Ok(())
+        Some(CommandKind::Providers(args)) => {
+            providers(args.action.unwrap_or(ProviderAction::List))
         }
-        Some(CommandKind::Agents) => {
-            println!("AGENTS\n● Uthy       Lead planner       READY\n○ Builder    Code specialist   AVAILABLE\n○ Tester     Verification       WAITING");
-            Ok(())
-        }
+        Some(CommandKind::Agents(args)) => agents(args.action.unwrap_or(AgentAction::List)),
         Some(CommandKind::Tools) => {
             println!("TOOLS\n✓ read_file       SAFE\n✓ list_directory  SAFE\n! write_file      ASK\n! shell           ASK\n! browser_open    ASK\n✓ git_diff        SAFE");
             Ok(())
@@ -480,17 +512,36 @@ fn chat(args: ChatArgs) -> Result<()> {
     };
     app.storage
         .append_message(session.id, MessageRole::User, &args.prompt)?;
-    let response = format!("Offline planner ready. I received: {}\n\nNext steps: inspect the workspace, form a scoped plan, request permission for mutations, then verify the result. Configure a provider to enable model-backed execution.", args.prompt);
+    let mut live = false;
+    let response = match Gateway::from_environment() {
+        Ok(provider) => {
+            live = true;
+            println!("Uthy · {}/{}", provider.provider(), provider.model());
+            use std::io::Write;
+            io::stdout().flush()?;
+            let response = provider.complete_streaming(
+                &[ChatMessage { role: "system".into(), content: "You are Uthy, a concise terminal coding agent. Never claim a command ran unless a tool result proves it.".into() }, ChatMessage { role: "user".into(), content: args.prompt.clone() }],
+                |delta| { print!("{delta}"); io::stdout().flush()?; Ok(()) },
+            )?;
+            println!();
+            response
+        }
+        Err(_error) if !has_provider_configuration() =>
+            format!("Offline planner ready. I received: {}\n\nConfigure a provider with `utharness providers env` to enable live model streaming.", args.prompt),
+        Err(error) => return Err(error),
+    };
     app.storage
         .append_message(session.id, MessageRole::Assistant, &response)?;
     app.storage.record_event(
         "session",
         session.id,
         "message_completed",
-        &json!({"offline": true}),
+        &json!({"offline": !live}),
         utharness_core::new_id(),
     )?;
-    println!("Uthy · OFFLINE PLANNER\n{}", response);
+    if !live {
+        println!("Uthy · OFFLINE PLANNER\n{}", response);
+    }
     Ok(())
 }
 
@@ -548,7 +599,7 @@ fn autonomous(args: AutonomousArgs) -> Result<()> {
             }
         }
     }
-    let provider = match OpenRouter::from_environment() {
+    let provider = match Gateway::from_environment() {
         Ok(provider) => provider,
         Err(error) => {
             for skill_id in &temporary_skill_ids {
@@ -779,7 +830,14 @@ fn doctor() -> Result<()> {
         "✓ shell         {}",
         env::var("SHELL").unwrap_or_else(|_| "sh".into())
     );
-    println!("✓ provider      offline planner available");
+    match Gateway::from_environment() {
+        Ok(provider) => println!(
+            "✓ provider      {}/{} configured",
+            provider.provider(),
+            provider.model()
+        ),
+        Err(_) => println!("! provider      offline planner only; run `utharness providers env`"),
+    }
     println!("✓ skills        built-in registry available");
     if termux::is_termux() {
         print_termux_doctor();
@@ -803,14 +861,95 @@ fn setup() -> Result<()> {
         println!("platform:  {}", env::consts::OS);
         println!("✓ workspace database initialized");
     }
-    println!("next: utharness doctor");
+    println!("\nAI gateway setup (keys are read from the environment and never stored):");
+    println!("  export UTHARNESS_PROVIDER=openrouter");
+    println!("  export OPENROUTER_API_KEY=...   # or OPENAI_API_KEY/GROQ_API_KEY/etc.");
+    println!("  export UTHARNESS_MODEL=openrouter/free");
+    println!("next: utharness providers test && utharness doctor");
     Ok(())
+}
+
+fn providers(action: ProviderAction) -> Result<()> {
+    match action {
+        ProviderAction::List => {
+            println!("PROVIDER GATEWAYS");
+            for provider in supported_providers() {
+                let state = if provider.configured {
+                    "CONFIGURED"
+                } else {
+                    "NEEDS KEY"
+                };
+                let credential = provider.credential_source.as_deref().unwrap_or(
+                    if provider.provider == "ollama" {
+                        "no key"
+                    } else {
+                        "—"
+                    },
+                );
+                println!(
+                    "{:<11} {:<11} {:<34} key={}",
+                    provider.provider, state, provider.model, credential
+                );
+            }
+        }
+        ProviderAction::Test { provider } => {
+            let gateway = if provider == "auto" {
+                Gateway::from_environment()?
+            } else {
+                Gateway::new_from_environment(ProviderKind::parse(&provider)?)?
+            };
+            let status = gateway.health_check()?;
+            println!(
+                "✓ provider={} model={} endpoint={} HTTP={}",
+                gateway.provider(),
+                gateway.model(),
+                gateway.base_url(),
+                status
+            );
+        }
+        ProviderAction::Env => {
+            println!("AI GATEWAY ENVIRONMENT");
+            println!("UTHARNESS_PROVIDER=openrouter|openai|groq|together|deepseek|fireworks|ollama|custom");
+            println!("UTHARNESS_MODEL=<provider model id>");
+            println!("UTHARNESS_PROVIDER_URL=<HTTPS OpenAI-compatible /v1 endpoint>");
+            println!("UTHARNESS_API_KEY=<custom override>");
+            println!("Provider keys: OPENROUTER_API_KEY OPENAI_API_KEY GROQ_API_KEY TOGETHER_API_KEY DEEPSEEK_API_KEY FIREWORKS_API_KEY");
+            println!("Secrets are read at process start and are never persisted by Utharness.");
+        }
+    }
+    Ok(())
+}
+
+fn agents(action: AgentAction) -> Result<()> {
+    match action {
+        AgentAction::List => {
+            println!("AGENT RUNTIME");
+            println!("● Uthy       planner/executor   READY");
+            println!("  tools      list_directory read_file git_status git_diff");
+            println!("  policy     SAFE read-only; every tool request is evaluated and persisted");
+            println!("Run: utharness agents run \"Inspect this repository\"");
+            Ok(())
+        }
+        AgentAction::Run {
+            prompt,
+            max_steps,
+            workspace,
+        } => autonomous(AutonomousArgs {
+            prompt,
+            max_steps,
+            workspace,
+        }),
+    }
 }
 
 fn models() -> Result<()> {
     println!("MODELS");
-    println!("offline/gpt-4o-mini       local fallback");
-    println!("OpenRouter/Qwen3-Coder   configure provider credentials to enable");
+    for provider in supported_providers()
+        .into_iter()
+        .filter(|provider| provider.configured)
+    {
+        println!("{}/{}", provider.provider, provider.model);
+    }
     if let Ok(model) = env::var("UTHARNESS_MODEL") {
         println!("active: {model}");
     }
@@ -937,7 +1076,21 @@ fn config_show() -> Result<()> {
     println!("workspace = \"{}\"", app.workspace.canonical_path);
     println!("database = \"{}\"", app.storage.path().display());
     println!("permission_mode = \"SAFE\"");
-    println!("provider = \"offline\"");
+    let provider = Gateway::from_environment().ok();
+    println!(
+        "provider = \"{}\"",
+        provider
+            .as_ref()
+            .map(|value| value.provider())
+            .unwrap_or("offline")
+    );
+    println!(
+        "model = \"{}\"",
+        provider
+            .as_ref()
+            .map(|value| value.model())
+            .unwrap_or("deterministic-planner")
+    );
     println!("theme = \"utharness-carbon\"");
     Ok(())
 }

@@ -18,7 +18,7 @@
 
 **Utharness** is a local-first autonomous AI agent terminal. It combines a native Rust runtime, SQLite persistence, a conservative SAFE execution boundary, a scriptable CLI, and a reference-matched React/Ink terminal interface. The project is designed to be inspectable, reproducible, and useful both offline and with an explicitly configured provider.
 
-> **Current status:** the repository is public and ships the working offline-first runtime, native CLI, bounded autonomous inspection path, persistent SQLite journal, and bundled TypeScript/Ink TUI. Provider streaming, broader autonomous tool execution, and native packages for every operating system remain subsequent milestones.
+> **Current status:** the repository is public and ships the working offline-first runtime, native CLI, real-time OpenAI-compatible provider streaming, bounded autonomous inspection path, persistent SQLite journal, and bundled TypeScript/Ink TUI. Broader autonomous write tools, messaging transports, scheduling, and native packages for every operating system remain subsequent milestones.
 
 ## Installation methods
 
@@ -91,6 +91,12 @@ pnpm --dir ui build
 
 # Open the persistent terminal UI
 ./target/release/utharness tui
+
+# Or configure a live gateway and stream a response
+export UTHARNESS_PROVIDER=ollama
+export UTHARNESS_MODEL=qwen2.5-coder:7b
+./target/release/utharness providers test
+./target/release/utharness chat "Summarize this workspace"
 ```
 
 The native binary remains named `utharness` for CLI compatibility. The repository and distribution identity is **utharnessly**. The default database is `~/.local/share/utharness/utharness.db`; use `UTHARNESS_HOME` or `UTHARNESS_DB` for isolated environments.
@@ -116,8 +122,9 @@ The interactive capture set covers `40`, `60`, `80`, `120`, `160`, and `220` col
 | --- | --- |
 | Native CLI | Clap commands for `init`, `chat`, `run`, `tui`, `autonomous`, `doctor`, `config`, `sessions`, `memory`, `checkpoint`, `skills`, `providers`, `agents`, and `tools`. |
 | SQLite persistence | Bundled SQLite with foreign keys, WAL mode, migrations, sessions, messages, tasks, checkpoints, events, memories, FTS5 search, tool calls, permission decisions, and audit records. |
+| AI gateway | Real-time SSE token streaming and health checks for OpenRouter, OpenAI, Groq, Together, DeepSeek, Fireworks, Ollama, and custom OpenAI-compatible endpoints. Keys are environment-only. |
 | Offline operation | Deterministic offline planner responses persist user and assistant messages without credentials. |
-| Bounded autonomy | OpenRouter-compatible JSON planning with a strict SAFE read-only allowlist, step limits, workspace scoping, redaction, and persisted events. |
+| Bounded autonomy | Provider-neutral JSON planning with a strict SAFE read-only allowlist, step limits, workspace scoping, redaction, and persisted events. |
 | Safety | SAFE default, explicit approval for shell execution, destructive-command denial, workspace path validation, and secret redaction. |
 | Ink terminal UI | Full-screen React/Ink application with fixed branding, left-aligned message rows, tool cards, streaming presentation, command palette, prompt suggestions, scrolling, resize handling, spinners, and limited-color fallbacks. |
 | Diagnostics | Database integrity, workspace, storage, shell, provider, permissions, skills, and clean-runtime checks. |
@@ -128,10 +135,10 @@ The interactive capture set covers `40`, `60`, `80`, `120`, `160`, and `220` col
 ```text
 utharness                          Open the Ink TUI when attached to a terminal
 utharness init [--workspace PATH]  Initialize a local workspace
-utharness chat PROMPT              Persist a prompt and offline planner response
+utharness chat PROMPT              Stream a live response or use the offline planner
 utharness run --command CMD        Refuse shell execution unless explicitly allowed
 utharness tui [--headless]         Open the UI or print non-interactive status
-utharness autonomous PROMPT        Run bounded SAFE inspection through OpenRouter
+utharness autonomous PROMPT        Run bounded SAFE inspection through the active gateway
 utharness doctor                   Run actionable diagnostics
 utharness config show              Print effective local configuration
 utharness sessions list            List persisted sessions
@@ -148,8 +155,11 @@ utharness skills rollback SKILL    Restore the newest quarantined installation
 utharness skills test SKILL        Re-evaluate runtime and permission health
 utharness skills run SKILL        Run a built-in skill adapter
 utharness skills sync              Synchronize bounded public source metadata
-utharness providers                List provider routes
-utharness agents                   List agent roles
+utharness providers list           List gateway configuration without secret values
+utharness providers test [NAME]    Test the selected gateway's models endpoint
+utharness providers env            Print environment setup help
+utharness agents list              Show the real bounded agent runtime
+utharness agents run PROMPT        Run the bounded SAFE inspection agent
 utharness tools                    List registered tools and policy modes
 ```
 
@@ -159,6 +169,8 @@ Shell execution is intentionally opt-in:
 utharness run --command "cargo test"           # denied in SAFE mode
 utharness run --command "cargo test" --allow    # explicit approval path
 ```
+
+Live model setup, provider defaults, local endpoints, and the credential-safety contract are documented in [`docs/providers.md`](./docs/providers.md).
 
 ## Reference-matched terminal UI
 
