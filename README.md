@@ -210,7 +210,7 @@ uv tool install utharnessly
 uvx utharnessly --help
 ```
 
-Both registry launchers currently support Linux x64, macOS x64, and Windows x64 release artifacts. Use `utharnessly update` to clear and redownload the cached runtime. Use `utharnessly uninstall` to print the package-manager and cache-removal commands. The complete package-manager, source, platform, terminal, compatibility, and troubleshooting matrix is in [`docs/installation.md`](./docs/installation.md).
+Both registry launchers currently support Linux x64, macOS x64/arm64, and Windows x64 release artifacts. Use `utharnessly update` to clear and redownload the cached runtime. Use `utharnessly uninstall` to print the package-manager and cache-removal commands. The complete package-manager, source, platform, terminal, compatibility, and troubleshooting matrix is in [`docs/installation.md`](./docs/installation.md).
 
 ## Skill Engine
 

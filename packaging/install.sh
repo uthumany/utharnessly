@@ -26,7 +26,14 @@ esac
 
 command -v curl >/dev/null || { echo "curl is required" >&2; exit 1; }
 command -v tar >/dev/null || { echo "tar is required" >&2; exit 1; }
-command -v sha256sum >/dev/null || { echo "sha256sum is required" >&2; exit 1; }
+if command -v sha256sum >/dev/null; then
+  checksum() { sha256sum "$1" | awk '{print $1}'; }
+elif command -v shasum >/dev/null; then
+  checksum() { shasum -a 256 "$1" | awk '{print $1}'; }
+else
+  echo "sha256sum or shasum is required" >&2
+  exit 1
+fi
 
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 arch="$(uname -m)"
@@ -69,11 +76,13 @@ EOF
   exit 1
 fi
 
-if curl --fail --location --silent --show-error "${release_url}/SHA256SUMS" --output "$checksums"; then
-  expected="$(awk -v name="$asset" '$2 == name || $2 == "*" name { print $1; exit }' "$checksums")"
-  actual="$(sha256sum "$archive" | awk '{print $1}')"
-  [[ -n "$expected" && "$expected" == "$actual" ]] || { echo "checksum verification failed" >&2; exit 1; }
-fi
+curl --fail --location --silent --show-error "${release_url}/SHA256SUMS" --output "$checksums" || {
+  echo "checksum manifest download failed; refusing to install an unverified archive" >&2
+  exit 1
+}
+expected="$(awk -v name="$asset" '$2 == name || $2 == "*" name { print $1; exit }' "$checksums")"
+actual="$(checksum "$archive")"
+[[ -n "$expected" && "$expected" == "$actual" ]] || { echo "checksum verification failed" >&2; exit 1; }
 
 mkdir -p "$INSTALL_DIR"
 tar -xzf "$archive" -C "$tmpdir"
@@ -81,6 +90,7 @@ package_dir="$(find "$tmpdir" -mindepth 1 -maxdepth 1 -type d -name 'utharnessly
 [[ -n "$package_dir" ]] || { echo "release archive has no utharnessly directory" >&2; exit 1; }
 rm -rf "${INSTALL_DIR}/utharnessly-ui"
 install -m 0755 "${package_dir}/utharness" "${INSTALL_DIR}/utharness"
+ln -sfn utharness "${INSTALL_DIR}/utharnessly"
 mkdir -p "${INSTALL_DIR}/utharnessly-ui"
 cp -R "${package_dir}/ui/." "${INSTALL_DIR}/utharnessly-ui/"
 

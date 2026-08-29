@@ -2,7 +2,7 @@
 
 For the shortest copyable install page, start with [`INSTALLATION.md`](../INSTALLATION.md). This document contains the full platform, terminal, update, uninstall, and troubleshooting matrix.
 
-`utharnessly` is distributed as a native Rust CLI with a bundled React/Ink terminal UI. The first public release provides signed release archives for **Linux x64, macOS x64, and Windows x64**, plus thin launchers on **npm** and **PyPI** that download and verify the matching native archive on first use. Other combinations are documented as source, remote-host, or unsupported paths rather than being presented as working installers.
+`utharnessly` is distributed as a native Rust CLI with a bundled React/Ink terminal UI. The first public release provides signed release archives for **Linux x64, macOS x64/arm64, and Windows x64**, plus thin launchers on **npm** and **PyPI** that download and verify the matching native archive on first use. Other combinations are documented as source, remote-host, or unsupported paths rather than being presented as working installers.
 
 ## Termux / Android
 
@@ -165,7 +165,7 @@ To uninstall the npm launcher, run `npm uninstall --global utharnessly` and remo
 | macOS x64 | Yes | Yes | Yes | **Tested in hosted CI; native local shell not used** |
 | Windows x64 | Yes | Yes | Yes | **Tested in hosted CI; native local shell not used** |
 | Linux arm64 | No | No matching archive | Possible if Rust/Node toolchains are available | **Partially supported; source only** |
-| macOS arm64 | No | No matching archive | Possible if Rust/Node toolchains are available | **Partially supported; source only** |
+| macOS arm64 | Yes | Yes | Yes | **Built and tested on a hosted Apple Silicon runner; native local shell not used** |
 | Windows arm64 | No | No matching archive | Possible if Rust/Node toolchains are available | **Partially supported; source only** |
 | Android / Termux | Yes: signed APT packages | No matching npm/PyPI archive | Possible with Android toolchains | **Package/repository verified; physical-device test pending** |
 | iOS/iPadOS | No | No | No local native claim | **SSH/remote-host workflow** |
@@ -178,7 +178,7 @@ To uninstall the npm launcher, run `npm uninstall --global utharnessly` and remo
 |---|---|---|
 | Windows Terminal, WezTerm, Alacritty, Tabby, Cmder | **Supported rendering class** | Pair with the Windows x64 release or source workflow; Windows-hosted CI validates the CLI build, not every emulator. |
 | Kitty, WezTerm, Alacritty, Ghostty, Tilix on Linux | **Supported rendering class** | Linux PTY screenshots and terminal smoke tests were run on Linux; emulator-specific glyph differences remain possible. |
-| Ghostty, iTerm2, Warp, WezTerm, Kitty on macOS | **Supported rendering class** | Use the macOS x64 release or source workflow; hosted CI validates macOS builds. |
+| Ghostty, iTerm2, Warp, WezTerm, Kitty on macOS | **Supported rendering class** | Use the macOS x64 or arm64 release or source workflow; hosted CI validates macOS builds. |
 | Termux | **Supported package path; device validation pending** | Use the signed v0.2.8 repository. Real terminal behavior, Android-version compatibility, and Termux:API execution still require device testing. |
 | Termius, ConnectBot, TermAI, Moshi | **Remote-client workflow** | These are SSH/client environments, not independently tested native build targets. |
 | Blink Shell, Secure ShellFish | **Remote-client workflow** | Connect to a supported Linux/macOS host. |

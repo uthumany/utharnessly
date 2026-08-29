@@ -19,8 +19,9 @@ function platformAsset() {
   const arch = process.arch;
   if (platform === 'linux' && arch === 'x64') return ['utharnessly-linux-x64.tar.gz', 'tar.gz'];
   if (platform === 'darwin' && arch === 'x64') return ['utharnessly-macos-x64.tar.gz', 'tar.gz'];
+  if (platform === 'darwin' && arch === 'arm64') return ['utharnessly-macos-arm64.tar.gz', 'tar.gz'];
   if (platform === 'win32' && arch === 'x64') return ['utharnessly-windows-x64.zip', 'zip'];
-  throw new Error(`No published utharnessly binary for ${platform}/${arch}. Supported release targets are Linux x64, macOS x64, and Windows x64; use the source instructions at https://github.com/${REPOSITORY} on other targets.`);
+  throw new Error(`No published utharnessly binary for ${platform}/${arch}. Supported release targets are Linux x64, macOS x64/arm64, and Windows x64; use the source instructions at https://github.com/${REPOSITORY} on other targets.`);
 }
 
 function cacheRoot() {
@@ -37,7 +38,10 @@ async function download(url, destination) {
 async function verifyChecksum(archive, checksumFile) {
   const contents = await fs.readFile(checksumFile, 'utf8');
   const asset = path.basename(archive);
-  const line = contents.split(/\r?\n/).find((entry) => entry.includes(asset));
+  const line = contents.split(/\r?\n/).find((entry) => {
+    const fields = entry.trim().split(/\s+/);
+    return fields.length >= 2 && fields.at(-1).replace(/^\*/, '') === asset;
+  });
   if (!line) throw new Error(`SHA256SUMS does not contain ${asset}`);
   const expected = line.trim().split(/\s+/)[0].toLowerCase();
   const hash = createHash('sha256').update(await fs.readFile(archive)).digest('hex');

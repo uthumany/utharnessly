@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.platform }} artifact
+    name: Build ${{ matrix.platform }}-${{ matrix.arch }} artifact
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -19,12 +19,22 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux
+            arch: x64
             archive: tar.gz
+            file_pattern: x86-64
+          - os: macos-15-intel
+            platform: macos
+            arch: x64
+            archive: tar.gz
+            file_pattern: x86_64
           - os: macos-latest
             platform: macos
+            arch: arm64
             archive: tar.gz
+            file_pattern: arm64
           - os: windows-latest
             platform: windows
+            arch: x64
             archive: zip
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -40,13 +50,17 @@ jobs:
       - run: pnpm --dir ui install --frozen-lockfile
       - run: pnpm --dir ui build
       - run: cargo build --release
+      - name: Verify native binary architecture
+        if: runner.os != 'Windows'
+        shell: bash
+        run: file target/release/utharness | grep -F '${{ matrix.file_pattern }}'
       - name: Package POSIX artifact
         if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
-          root="utharnessly-${{ matrix.platform }}-x64"
+          root="utharnessly-${{ matrix.platform }}-${{ matrix.arch }}"
           mkdir -p "dist/package/${root}/ui"
           cp target/release/utharness "dist/package/${root}/utharness"
           cp -R ui/dist "dist/package/${root}/ui/dist"
@@ -56,7 +70,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $root = "utharnessly-windows-x64"
+          $root = "utharnessly-windows-${{ matrix.arch }}"
           New-Item -ItemType Directory -Force "dist/package/$root/ui" | Out-Null
           Copy-Item target/release/utharness.exe "dist/package/$root/utharness.exe"
           Copy-Item ui/dist "dist/package/$root/ui/dist" -Recurse
@@ -64,7 +78,7 @@ jobs:
           Compress-Archive -Path "dist/package/$root/*" -DestinationPath "dist/$root.zip" -Force
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: release-${{ matrix.platform }}
+          name: release-${{ matrix.platform }}-${{ matrix.arch }}
           path: dist/*
           if-no-files-found: error
 

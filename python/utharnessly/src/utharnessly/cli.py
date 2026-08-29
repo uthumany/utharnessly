@@ -32,11 +32,13 @@ def platform_asset() -> tuple[str, str]:
         return "utharnessly-linux-x64.tar.gz", "tar.gz"
     if system == "darwin" and machine in {"x86_64", "amd64"}:
         return "utharnessly-macos-x64.tar.gz", "tar.gz"
+    if system == "darwin" and machine in {"arm64", "aarch64"}:
+        return "utharnessly-macos-arm64.tar.gz", "tar.gz"
     if system.startswith("win") and machine in {"x86_64", "amd64"}:
         return "utharnessly-windows-x64.zip", "zip"
     raise RuntimeError(
         f"No published utharnessly binary for {system}/{machine}. "
-        "Supported release targets are Linux x64, macOS x64, and Windows x64; "
+        "Supported release targets are Linux x64, macOS x64/arm64, and Windows x64; "
         f"use the source instructions at https://github.com/{REPOSITORY} on other targets."
     )
 
@@ -57,7 +59,14 @@ def _download(url: str, destination: Path) -> None:
 
 def _verify_checksum(archive: Path, checksums: Path) -> None:
     asset = archive.name
-    line = next((row for row in checksums.read_text(encoding="utf-8").splitlines() if asset in row), None)
+    line = next(
+        (
+            row
+            for row in checksums.read_text(encoding="utf-8").splitlines()
+            if len(row.split()) >= 2 and row.split()[-1].lstrip("*") == asset
+        ),
+        None,
+    )
     if not line:
         raise RuntimeError(f"SHA256SUMS does not contain {asset}")
     expected = line.split()[0].lower()

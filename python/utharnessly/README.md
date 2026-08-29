@@ -11,7 +11,7 @@ utharnessly --version
 utharnessly
 ```
 
-The release launcher currently publishes Linux x64, macOS x64, and Windows x64 artifacts. Other architectures and operating systems should use the documented source-build or remote-host workflow in the repository installation guide.
+The release launcher currently publishes Linux x64, macOS x64/arm64, and Windows x64 artifacts. Other architectures and operating systems should use the documented source-build or remote-host workflow in the repository installation guide.
 
 ```bash
 utharnessly update

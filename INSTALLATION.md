@@ -40,7 +40,7 @@ bun add --global utharnessly
 bunx utharnessly --help
 ```
 
-The npm launcher currently publishes native artifacts for **Linux x64, macOS x64, and Windows x64**. Deno’s npm compatibility layer is documented as an **unverified/source fallback**, not as a tested native installation method; use the Git source workflow below unless you validate the command on your target Deno release.
+The npm launcher currently publishes native artifacts for **Linux x64, macOS x64/arm64, and Windows x64**. Deno’s npm compatibility layer is documented as an **unverified/source fallback**, not as a tested native installation method; use the Git source workflow below unless you validate the command on your target Deno release.
 
 ## PyPI, pipx, and uv
 

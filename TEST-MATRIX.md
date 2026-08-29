@@ -13,6 +13,7 @@ Status values are **Passed**, **Partial**, **Unverified**, or **Unsupported**. P
 |---|---|---|---|---|---|
 | Linux x64 | Yes | curl, archive, NPM, PyPI, source | Linux sandbox and Ubuntu hosted CI | Passed | Rust/UI/CLI/package tests and live v0.2.8 archive verification. |
 | macOS x64 | Yes | archive, NPM, PyPI, source | macOS hosted CI | Passed | Hosted build, lint, test, and package workflow. |
+| macOS arm64 | Yes | curl, archive, NPM, PyPI, source | Apple Silicon macOS hosted CI | Passed | Architecture-specific release artifact and launcher routing. |
 | Windows x64 | Yes | PowerShell, archive, NPM, PyPI, source | Windows hosted CI | Passed | Hosted build, lint, test, and package workflow. |
 | Android Termux aarch64 | Yes | Signed Pages APT repository | GitHub-hosted Android cross-build; no device | Partial | Binary/package/repository built and verified; physical Termux install pending. |
 | Android Termux x86_64 | Yes | Signed Pages APT repository | GitHub-hosted Android cross-build; no device | Partial | Binary/package/repository built and verified; physical Termux install pending. |
@@ -45,7 +46,7 @@ Status values are **Passed**, **Partial**, **Unverified**, or **Unsupported**. P
 
 | Method | Scope | Result | Evidence / boundary |
 |---|---|---|---|
-| curl POSIX installer | Linux/macOS x64 | Passed in local/hosted checks | Native archive and checksum flow; macOS local execution unavailable. |
+| curl POSIX installer | Linux x64 and macOS x64/arm64 | Passed in local/hosted checks | Native archive and checksum flow; macOS local execution unavailable. |
 | PowerShell installer | Windows x64 | Passed in hosted workflow | Native Windows shell not available locally. |
 | npm / npx / pnpm / pnpx | Supported native release targets | Source package 0.2.8 clean install passed; NPM 0.2.8 live install passed | NPM launcher downloads, verifies, caches, and forwards. |
 | Bun / bunx | Launcher compatibility | Partial | Documentation-only compatibility class; Bun runtime not installed in sandbox. |
