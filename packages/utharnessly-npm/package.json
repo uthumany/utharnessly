@@ -19,7 +19,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/uthumany/utharnessly.git"
+    "url": "git+https://github.com/uthumany/utharnessly.git"
   },
   "bugs": {
     "url": "https://github.com/uthumany/utharnessly/issues"
