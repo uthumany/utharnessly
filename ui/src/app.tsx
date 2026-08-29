@@ -83,7 +83,7 @@ export function App() {
   const compact = breakpoint === 'tiny' || breakpoint === 'compact';
   const contentWidth = Math.max(28, columns - (compact ? 0 : 4));
   const banner = bannerVariant(ui.bannerMode, breakpoint, rows);
-  const bannerHeight = banner === 'full' ? 7 : banner === 'medium' ? 3 : banner === 'hide' ? 0 : 2;
+  const bannerHeight = banner === 'full' ? 5 : banner === 'medium' ? 3 : banner === 'hide' ? 0 : 2;
   const showTips = !compact && rows >= 32;
   const showWarning = Boolean(snapshot && !snapshot.projectSpecific && !compact && rows >= 28);
   const fixedHeight = 1 + bannerHeight + (showTips ? 4 : 0) + (showWarning ? 4 : 0) + 4 + 2 + (overlay ? Math.min(15, (overlayDefaults[overlay]?.length ?? 1) + 3) : 0);

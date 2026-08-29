@@ -8,22 +8,18 @@ use std::thread;
 use std::time::Duration;
 
 /// Large Unicode-safe UTHY block lettering for terminals with enough width.
-pub const UNICODE_BANNER: [&str; 6] = [
-    "██╗   ██╗████████╗██╗  ██╗╚██╗ ██╔╝",
-    "██║   ██║╚══██╔══╝██║  ██║ ╚████╔╝ ",
-    "██║   ██║   ██║   ███████║  ╚██╔╝  ",
-    "██║   ██║   ██║   ██╔══██║   ██║   ",
-    "╚██████╔╝   ██║   ██║  ██║   ██║   ",
-    " ╚═════╝    ╚═╝   ╚═╝  ╚═╝   ╚═╝   ",
+pub const UNICODE_BANNER: [&str; 4] = [
+    "██╗ ██╗█████╗██╗ ██╗██╗ ██╗",
+    "██║ ██║╚═██╔╝██████║╚████╔╝",
+    "██║ ██║  ██║ ██╔═██║ ╚██╔╝ ",
+    "╚████╔╝  ██║ ██║ ██║  ██║  ",
 ];
 
 /// Smaller ASCII-only UTHY lettering for medium or forced-ASCII terminals.
-pub const ASCII_BANNER: [&str; 5] = [
-    "UU   UU TTTTTTT HH  HH YY  YY",
-    "UU   UU   TTT   HH  HH  YY YY ",
-    "UU   UU   TTT   HHHHHH   YYY  ",
-    "UU   UU   TTT   HH  HH    YY  ",
-    " UUUUUU   TTT   HH  HH    YY  ",
+pub const ASCII_BANNER: [&str; 3] = [
+    "UU UU TTTTT HH HH YY YY",
+    "UU UU   TT  HHHHH  YYY ",
+    "UUUUU   TT  HH HH   YY ",
 ];
 
 #[derive(Clone, Copy, Debug)]
@@ -161,7 +157,7 @@ fn render_banner_in_mode(width: u16, version: &str, ansi: bool, mode: BannerMode
             }
             if mode == BannerMode::Unicode {
                 lines.push((
-                    "  ───────────────────────────────────────░░".into(),
+                    "  ─────────────────────────────░░".into(),
                     Color::Rgb {
                         r: 226,
                         g: 119,
@@ -237,7 +233,12 @@ fn gradient_color(index: usize, count: usize) -> Color {
             b: 202,
         },
     ];
-    palette[index.min(count.saturating_sub(1)).min(palette.len() - 1)]
+    let palette_index = if count <= 1 {
+        0
+    } else {
+        index.min(count - 1) * (palette.len() - 1) / (count - 1)
+    };
+    palette[palette_index]
 }
 
 fn ansi_code(color: Color) -> String {
@@ -357,5 +358,13 @@ mod tests {
         assert!(output.contains("\u{1b}[38;2;255;222;72m"));
         assert!(output.contains("\u{1b}[38;2;247;190;202m"));
         assert!(output.contains("\u{1b}[0m"));
+    }
+
+    #[test]
+    fn wide_banner_stays_within_reduced_geometry() {
+        assert_eq!(UNICODE_BANNER.len(), 4);
+        assert!(UNICODE_BANNER.iter().all(|line| line.chars().count() <= 29));
+        assert_eq!(ASCII_BANNER.len(), 3);
+        assert!(ASCII_BANNER.iter().all(|line| line.chars().count() <= 25));
     }
 }

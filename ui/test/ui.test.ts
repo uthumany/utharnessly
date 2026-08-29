@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { editComposer } from '../src/tui/composer.js';
 import { bannerVariant, effectiveLayout, getBreakpoint, getTermuxBreakpoint, workspaceWidths } from '../src/tui/responsive.js';
+import { fullBanner } from '../src/components.js';
 import { getColorMode } from '../src/tui/theme.js';
 import { loadUiState, normalizeUiState, saveUiState } from '../src/tui/state.js';
 import { loadSnapshot, parseGitSnapshot } from '../src/runtime.js';
@@ -24,6 +25,11 @@ test('collapses workspace mode and banner responsively', () => {
   assert.equal(bannerVariant('full', 'wide', 40), 'full'); assert.equal(bannerVariant('full', 'standard', 30), 'medium');
   assert.equal(bannerVariant('compact', 'wide', 40), 'small'); assert.equal(bannerVariant('hide', 'wide', 40), 'hide');
   const widths = workspaceWidths(120); assert.equal(widths.navigation + widths.chat + widths.inspector, 118);
+});
+
+test('keeps the full ASCII banner within the reduced geometry', () => {
+  assert.equal(fullBanner.length, 4);
+  assert.ok(fullBanner.every(line => line.length <= 56));
 });
 
 test('respects terminal color capability fallbacks', () => {
