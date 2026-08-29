@@ -54,6 +54,14 @@ utharness setup
 utharness
 ```
 
+`utharness setup` opens a responsive keyboard-driven wizard in an interactive terminal. It offers Quick, Full, and Blank Slate modes; selects from the provider gateways implemented by the runtime; detects provider credentials from environment variables; and writes the provider, model, permission mode, and enabled capabilities to the workspace’s `utharness.json`. API keys are never written to that file. For automation and CI, the same validated path is available without a TUI:
+
+```bash
+utharness setup --non-interactive --mode full --provider ollama \
+  --model qwen2.5-coder:7b \
+  --tools workspace_read,git_inspection,skills,memory
+```
+
 The package installs only under `$PREFIX/bin/utharness`, `$PREFIX/lib/utharness`, and `$PREFIX/share/utharness`. User data remains under `~/.config/utharness`, `~/.local/share/utharness`, and `~/.cache/utharness`. Package-managed updates must use:
 
 ```bash
@@ -113,6 +121,12 @@ The following captures were generated from real isolated CLI and PTY runs. They 
 | ![UTHARNESS chat output](docs/assets/screenshots/chat.png) | ![UTHARNESS command palette](docs/assets/screenshots/command-palette.png) |
 | ![UTHARNESS configuration](docs/assets/screenshots/configuration.png) | ![UTHARNESS narrow terminal UI](docs/assets/screenshots/focus-80x24.png) |
 | ![UTHARNESS diagnostics](docs/assets/screenshots/doctor.png) | ![UTHARNESS compact terminal UI](docs/assets/screenshots/focus-40x18.png) |
+
+### Interactive setup wizard
+
+| Welcome | Provider selector | Capability selector |
+|---|---|---|
+| ![Utharness setup welcome](docs/assets/screenshots/setup-welcome.png) | ![Utharness provider selector](docs/assets/screenshots/setup-provider.png) | ![Utharness capability selector](docs/assets/screenshots/setup-tools.png) |
 
 The interactive capture set covers `40`, `60`, `80`, `120`, `160`, and `220` columns, including short-height layouts. The UI keeps its header, UTHARNESS banner, prompt, and status bar fixed while the conversation viewport changes with terminal size.
 

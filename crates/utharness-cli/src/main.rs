@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use skills::SkillRegistry;
 use std::{
@@ -33,7 +33,7 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum CommandKind {
     Init(InitArgs),
-    Setup,
+    Setup(SetupArgs),
     Chat(ChatArgs),
     Run(RunArgs),
     Tui(TuiArgs),
@@ -67,6 +67,44 @@ enum CommandKind {
 struct InitArgs {
     #[arg(long, default_value = ".")]
     workspace: PathBuf,
+}
+
+#[derive(Args, Debug)]
+struct SetupArgs {
+    /// Write a validated configuration without opening the interactive wizard.
+    #[arg(long)]
+    non_interactive: bool,
+    #[arg(long, default_value = "quick")]
+    mode: String,
+    #[arg(long)]
+    provider: Option<String>,
+    #[arg(long)]
+    model: Option<String>,
+    /// Comma-separated capability identifiers.
+    #[arg(long, value_delimiter = ',')]
+    tools: Vec<String>,
+}
+
+const SETUP_TOOLS: &[&str] = &[
+    "workspace_read",
+    "git_inspection",
+    "terminal",
+    "file_write",
+    "skills",
+    "memory",
+    "session_search",
+    "task_planning",
+];
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeConfig {
+    schema_version: u8,
+    mode: String,
+    provider: String,
+    model: String,
+    permission_mode: String,
+    tools: Vec<String>,
 }
 
 #[derive(Args, Debug)]
@@ -323,6 +361,9 @@ fn main() -> Result<()> {
         .compact()
         .init();
     let cli = Cli::parse();
+    if !matches!(&cli.command, Some(CommandKind::Setup(_))) {
+        apply_runtime_config()?;
+    }
     match cli.command {
         None => launch_tui(false),
         Some(CommandKind::Init(args)) => {
@@ -337,7 +378,7 @@ fn main() -> Result<()> {
             );
             Ok(())
         }
-        Some(CommandKind::Setup) => setup(),
+        Some(CommandKind::Setup(args)) => setup(args),
         Some(CommandKind::Chat(args)) => chat(args),
         Some(CommandKind::Run(args)) => run_command(args),
         Some(CommandKind::Tui(args)) => launch_tui(args.headless),
@@ -650,6 +691,11 @@ fn autonomous(args: AutonomousArgs) -> Result<()> {
     let mut completed = 0usize;
     let mut results = Vec::new();
     for (index, step) in plan.steps.into_iter().take(max_steps).enumerate() {
+        if !autonomous_tool_enabled(&step.tool) {
+            println!("{:02} {} · Deny", index + 1, step.tool);
+            println!("   disabled by utharness.json capability selection");
+            continue;
+        }
         let request = utharness_core::ToolRequest {
             tool: step.tool.clone(),
             target: step.target.clone(),
@@ -741,7 +787,26 @@ fn execute_autonomous_step(policy: &Policy, root: &Path, step: &AgentStep) -> Re
     }
 }
 
+fn autonomous_tool_enabled(tool: &str) -> bool {
+    let capability = match tool {
+        "list_directory" | "read_file" => "workspace_read",
+        "git_status" | "git_diff" => "git_inspection",
+        _ => return false,
+    };
+    runtime_tool_enabled(capability)
+}
+
+fn runtime_tool_enabled(capability: &str) -> bool {
+    env::var("UTHARNESS_TOOLS")
+        .ok()
+        .map(|configured| configured.split(',').any(|item| item.trim() == capability))
+        .unwrap_or(true)
+}
+
 fn run_command(args: RunArgs) -> Result<()> {
+    if !runtime_tool_enabled("terminal") {
+        anyhow::bail!("terminal capability is disabled; enable it with `utharness setup`");
+    }
     execution::run_shell(&args.workspace, &args.command, args.allow)
 }
 
@@ -846,8 +911,78 @@ fn doctor() -> Result<()> {
     Ok(())
 }
 
-fn setup() -> Result<()> {
+fn setup(args: SetupArgs) -> Result<()> {
+    if !args.non_interactive && io::stdin().is_terminal() && io::stdout().is_terminal() {
+        return launch_ui(&["--setup"]);
+    }
+
     let app = App::open(".")?;
+    let mode = match args.mode.trim().to_ascii_lowercase().as_str() {
+        "quick" | "full" | "blank" => args.mode.trim().to_ascii_lowercase(),
+        other => anyhow::bail!("unsupported setup mode '{other}'; use quick, full, or blank"),
+    };
+    let provider = args.provider.unwrap_or_else(|| {
+        if mode == "blank" {
+            "offline".into()
+        } else {
+            "openrouter".into()
+        }
+    });
+    let status = if provider == "offline" {
+        None
+    } else {
+        Some(Gateway::status_from_environment(ProviderKind::parse(
+            &provider,
+        )?))
+    };
+    let model = args.model.unwrap_or_else(|| {
+        status
+            .as_ref()
+            .map(|value| value.model.clone())
+            .unwrap_or_else(|| "deterministic-planner".into())
+    });
+    let tools = if args.tools.len() == 1 && args.tools[0] == "none" {
+        Vec::new()
+    } else if args.tools.is_empty() {
+        match mode.as_str() {
+            "blank" => vec!["workspace_read".into()],
+            _ => vec![
+                "workspace_read".into(),
+                "git_inspection".into(),
+                "skills".into(),
+                "memory".into(),
+            ],
+        }
+    } else {
+        args.tools
+    };
+    for tool in &tools {
+        if !SETUP_TOOLS.contains(&tool.as_str()) {
+            anyhow::bail!("unsupported setup capability '{tool}'");
+        }
+    }
+    let permission_mode = if tools
+        .iter()
+        .any(|tool| tool == "terminal" || tool == "file_write")
+    {
+        "ask"
+    } else {
+        "safe"
+    };
+    let config = RuntimeConfig {
+        schema_version: 1,
+        mode,
+        provider,
+        model,
+        permission_mode: permission_mode.into(),
+        tools,
+    };
+    let config_path = env::current_dir()?.join("utharness.json");
+    fs::write(
+        &config_path,
+        format!("{}\n", serde_json::to_string_pretty(&config)?),
+    )
+    .with_context(|| format!("failed to write {}", config_path.display()))?;
     println!("UTHARNESS SETUP");
     println!("workspace: {}", app.workspace.canonical_path);
     if termux::is_termux() {
@@ -861,10 +996,25 @@ fn setup() -> Result<()> {
         println!("platform:  {}", env::consts::OS);
         println!("✓ workspace database initialized");
     }
-    println!("\nAI gateway setup (keys are read from the environment and never stored):");
-    println!("  export UTHARNESS_PROVIDER=openrouter");
-    println!("  export OPENROUTER_API_KEY=...   # or OPENAI_API_KEY/GROQ_API_KEY/etc.");
-    println!("  export UTHARNESS_MODEL=openrouter/free");
+    println!("config:    {}", config_path.display());
+    println!("provider:  {}", config.provider);
+    println!("model:     {}", config.model);
+    println!("tools:     {}", config.tools.join(", "));
+    println!("\nAPI keys are read from the environment and never stored in utharness.json.");
+    if let Some(status) = status {
+        if status.configured {
+            if let Some(source) = status.credential_source.as_deref() {
+                println!("✓ credentials found in {source}");
+            } else {
+                println!("✓ no API key required for this provider");
+            }
+        } else {
+            println!(
+                "! credentials missing; run `utharness providers env` for {} setup",
+                config.provider
+            );
+        }
+    }
     println!("next: utharness providers test && utharness doctor");
     Ok(())
 }
@@ -1128,22 +1278,35 @@ fn config_show() -> Result<()> {
     let app = App::open(".")?;
     println!("workspace = \"{}\"", app.workspace.canonical_path);
     println!("database = \"{}\"", app.storage.path().display());
-    println!("permission_mode = \"SAFE\"");
+    let saved = load_runtime_config()?;
+    println!(
+        "permission_mode = \"{}\"",
+        saved
+            .as_ref()
+            .map(|value| value.permission_mode.as_str())
+            .unwrap_or("safe")
+    );
     let provider = Gateway::from_environment().ok();
     println!(
         "provider = \"{}\"",
         provider
             .as_ref()
-            .map(|value| value.provider())
-            .unwrap_or("offline")
+            .map(|value| value.provider().to_string())
+            .or_else(|| saved.as_ref().map(|value| value.provider.clone()))
+            .unwrap_or_else(|| "offline".into())
     );
     println!(
         "model = \"{}\"",
         provider
             .as_ref()
-            .map(|value| value.model())
-            .unwrap_or("deterministic-planner")
+            .map(|value| value.model().to_string())
+            .or_else(|| saved.as_ref().map(|value| value.model.clone()))
+            .unwrap_or_else(|| "deterministic-planner".into())
     );
+    if let Some(saved) = saved {
+        println!("setup_mode = \"{}\"", saved.mode);
+        println!("tools = \"{}\"", saved.tools.join(","));
+    }
     println!("theme = \"utharness-carbon\"");
     Ok(())
 }
@@ -1163,6 +1326,10 @@ fn launch_tui(headless: bool) -> Result<()> {
         return Ok(());
     }
 
+    launch_ui(&[])
+}
+
+fn launch_ui(arguments: &[&str]) -> Result<()> {
     let repository_root = env::var_os("UTHARNESS_SOURCE_ROOT")
         .map(PathBuf::from)
         .or_else(|| {
@@ -1192,7 +1359,7 @@ fn launch_tui(headless: bool) -> Result<()> {
 
     let mut command = if ui_entry.is_file() {
         let mut command = Command::new("node");
-        command.arg(ui_entry);
+        command.arg(ui_entry).args(arguments);
         command
     } else if ui_directory.join("package.json").is_file() {
         let mut command = Command::new("pnpm");
@@ -1212,6 +1379,43 @@ fn launch_tui(headless: bool) -> Result<()> {
     let status = command.current_dir(env::current_dir()?).status()?;
     if !status.success() {
         anyhow::bail!("TypeScript terminal UI exited with status {status}");
+    }
+    Ok(())
+}
+
+fn load_runtime_config() -> Result<Option<RuntimeConfig>> {
+    let path = env::current_dir()?.join("utharness.json");
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let raw =
+        fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
+    let config = serde_json::from_str(&raw)
+        .with_context(|| format!("invalid Utharness configuration in {}", path.display()))?;
+    Ok(Some(config))
+}
+
+fn apply_runtime_config() -> Result<()> {
+    let Some(config) = load_runtime_config()? else {
+        return Ok(());
+    };
+    if config.schema_version != 1 {
+        anyhow::bail!(
+            "unsupported utharness.json schema version {}",
+            config.schema_version
+        );
+    }
+    if config.provider != "offline" && env::var_os("UTHARNESS_PROVIDER").is_none() {
+        env::set_var("UTHARNESS_PROVIDER", &config.provider);
+    }
+    if config.provider != "offline" && env::var_os("UTHARNESS_MODEL").is_none() {
+        env::set_var("UTHARNESS_MODEL", &config.model);
+    }
+    if env::var_os("UTHARNESS_PERMISSION").is_none() {
+        env::set_var("UTHARNESS_PERMISSION", &config.permission_mode);
+    }
+    if env::var_os("UTHARNESS_TOOLS").is_none() {
+        env::set_var("UTHARNESS_TOOLS", config.tools.join(","));
     }
     Ok(())
 }

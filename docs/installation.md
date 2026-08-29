@@ -62,6 +62,16 @@ pkg install termux-api git openssh python
 
 ## Quick start
 
+After installation, run `utharness setup` in a terminal. The interactive wizard uses arrow keys and Enter for a quick or blank configuration; Full Setup also uses Space to toggle capabilities. It writes `utharness.json` in the current workspace. Provider API keys remain environment-only and are reported as detected or missing without being displayed.
+
+The scriptable equivalent is:
+
+```bash
+utharness setup --non-interactive --mode quick --provider openrouter
+```
+
+Only gateways and capabilities backed by the current runtime appear as selectable. Operations that can mutate files or invoke a shell are saved with `ask` permission mode and still require the explicit runtime approval path.
+
 ### Release archive on Linux or macOS
 
 ```bash

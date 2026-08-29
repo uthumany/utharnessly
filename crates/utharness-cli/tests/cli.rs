@@ -281,6 +281,44 @@ fn provider_and_agent_commands_report_real_runtime_state_without_secrets() {
 }
 
 #[test]
+fn setup_writes_valid_runtime_configuration_without_secrets() {
+    let workspace = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    let bin = env!("CARGO_BIN_EXE_utharness");
+    let output = run(
+        bin,
+        workspace.path(),
+        home.path(),
+        &[
+            "setup",
+            "--non-interactive",
+            "--mode",
+            "full",
+            "--provider",
+            "ollama",
+            "--model",
+            "qwen2.5-coder:7b",
+            "--tools",
+            "workspace_read,git_inspection,terminal",
+        ],
+    );
+    assert!(output.contains("provider:  ollama"));
+    let raw = std::fs::read_to_string(workspace.path().join("utharness.json")).unwrap();
+    let config: serde_json::Value = serde_json::from_str(&raw).unwrap();
+    assert_eq!(config["schemaVersion"], 1);
+    assert_eq!(config["permissionMode"], "ask");
+    assert_eq!(config["provider"], "ollama");
+    assert_eq!(config["model"], "qwen2.5-coder:7b");
+    assert!(raw.contains("workspace_read"));
+    assert!(!raw.to_ascii_lowercase().contains("api_key"));
+
+    let shown = run(bin, workspace.path(), home.path(), &["config"]);
+    assert!(shown.contains("provider = \"ollama\""));
+    assert!(shown.contains("setup_mode = \"full\""));
+    assert!(shown.contains("permission_mode = \"ask\""));
+}
+
+#[test]
 fn chat_streams_from_an_openai_compatible_gateway_and_persists_the_result() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
