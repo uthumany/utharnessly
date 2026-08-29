@@ -53,7 +53,7 @@ jobs:
         run: |
           node --check bin/utharnessly.js
           npm pack --dry-run
-          test "$(node bin/utharnessly.js --version)" = "utharnessly 0.2.9"
+          test "$(node bin/utharnessly.js --version)" = "utharnessly 0.2.10"
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
@@ -62,7 +62,7 @@ jobs:
         run: |
           python -m pip install --upgrade build twine
           PYTHONPATH=src python -m unittest discover -s tests -v
-          test "$(PYTHONPATH=src python -m utharnessly.cli --version)" = "utharnessly 0.2.9"
+          test "$(PYTHONPATH=src python -m utharnessly.cli --version)" = "utharnessly 0.2.10"
           python -m build
           python -m twine check --strict dist/*
 
@@ -93,7 +93,7 @@ jobs:
           dpkg-deb --contents "$deb" | grep -F './data/data/com.termux/files/usr/lib/utharness/dist/index.js'
           if dpkg-deb --contents "$deb" | grep -E '^\./(usr|opt)/'; then exit 1; fi
           sha256sum -c "$deb.sha256"
-          UTHARNESS_ALLOW_UNSIGNED=1 UTHARNESS_VERSION=0.2.9 termux/build-repository.sh "$RUNNER_TEMP/termux-package" "$RUNNER_TEMP/termux-repository"
+          UTHARNESS_ALLOW_UNSIGNED=1 UTHARNESS_VERSION=0.2.10 termux/build-repository.sh "$RUNNER_TEMP/termux-package" "$RUNNER_TEMP/termux-repository"
           test -s "$RUNNER_TEMP/termux-repository/dists/stable/Release"
           test -s "$RUNNER_TEMP/termux-repository/dists/stable/main/binary-x86_64/Packages.gz"
           test -f "$RUNNER_TEMP/termux-repository/UNSIGNED-LOCAL-TEST-ONLY"

@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/uthumany/utharnessly/main/packaging
 
 ## Termux installation
 
-A native Termux package is built under [`packages/utharness`](./packages/utharness) and is published through the signed UTHARNESS APT repository. The current release line provides v0.2.9 packages and does not require root:
+A native Termux package is built under [`packages/utharness`](./packages/utharness) and is published through the signed UTHARNESS APT repository. The current release line provides v0.2.10 packages and does not require root:
 
 ```bash
 pkg update

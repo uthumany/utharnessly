@@ -969,7 +969,61 @@ fn mcp() -> Result<()> {
 
 fn update() -> Result<()> {
     println!("UTHARNESS UPDATE");
-    println!("{}", termux::update_guidance());
+    if termux::is_termux() {
+        println!("{}", termux::update_guidance());
+        return Ok(());
+    }
+
+    let executable = env::current_exe().context("cannot locate the running executable")?;
+    let install_directory = executable
+        .parent()
+        .context("running executable has no parent directory")?;
+    let release_install = install_directory.join("utharnessly-ui").is_dir()
+        || install_directory.join("ui/dist/index.js").is_file();
+
+    if !release_install {
+        println!("This executable is owned by a source build or package-manager launcher.");
+        println!("Use the command that installed it:");
+        println!("  npm install --global utharnessly@latest");
+        println!("  python -m pip install --upgrade utharnessly");
+        println!("  uv tool upgrade utharnessly");
+        println!("  cargo install --git https://github.com/uthumany/utharnessly --package utharness-cli --locked --force");
+        return Ok(());
+    }
+
+    #[cfg(windows)]
+    {
+        println!("Release archive installation detected.");
+        println!("Run the verified PowerShell installer:");
+        println!("  irm https://raw.githubusercontent.com/uthumany/utharnessly/main/packaging/install.ps1 | iex");
+        return Ok(());
+    }
+
+    #[cfg(not(windows))]
+    {
+        const INSTALLER_URL: &str =
+            "https://raw.githubusercontent.com/uthumany/utharnessly/main/packaging/install.sh";
+        println!(
+            "Release archive installation detected; checking the latest signed-checksum release…"
+        );
+        let script = reqwest::blocking::get(INSTALLER_URL)
+            .context("failed to download the release installer")?
+            .error_for_status()
+            .context("release installer download was rejected")?
+            .bytes()
+            .context("failed to read the release installer")?;
+        let temporary = env::temp_dir().join(format!("utharness-update-{}.sh", std::process::id()));
+        fs::write(&temporary, &script).context("failed to stage the release installer")?;
+        let status = Command::new("bash")
+            .arg(&temporary)
+            .status()
+            .context("failed to start the release installer")?;
+        let _ = fs::remove_file(&temporary);
+        if !status.success() {
+            anyhow::bail!("release installer exited with {status}");
+        }
+        println!("✓ Utharness release installation updated");
+    }
     Ok(())
 }
 

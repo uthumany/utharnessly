@@ -4,6 +4,8 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.10] — 2026-08-30
+
 ### Added
 
 - Provider-neutral OpenAI-compatible gateway for OpenRouter, OpenAI, Groq, Together, DeepSeek, Fireworks, Ollama, and custom endpoints.
@@ -20,6 +22,7 @@ All notable changes to utharnessly are documented here.
 
 - Release and Termux UI artifacts now bundle all Node runtime dependencies instead of importing packages from an unavailable `node_modules` directory.
 - Packaged UI directories include their ESM package metadata, eliminating Node's typeless-package warning after installation.
+- `utharness update` now recognizes release-archive installations and runs the checksum-verifying installer; other installations receive concrete npm, PyPI, uv, Cargo, or Termux update commands.
 
 ## [0.2.9] — 2026-08-29
 
@@ -102,4 +105,5 @@ Published native release artifacts target Linux x64, macOS x64, and Windows x64;
 
 [0.2.7]: https://github.com/uthumany/utharnessly/releases/tag/v0.2.7
 [0.2.9]: https://github.com/uthumany/utharnessly/releases/tag/v0.2.9
+[0.2.10]: https://github.com/uthumany/utharnessly/releases/tag/v0.2.10
 [0.1.0]: https://github.com/uthumany/utharnessly/releases/tag/v0.1.0
