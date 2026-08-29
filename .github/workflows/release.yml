@@ -103,7 +103,7 @@ jobs:
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
         with:
           version: 11.19.0
-      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
       - uses: nttld/setup-ndk@2817442ee7c3346c1eb7d2ec60263c93206ba14f
         with:
           ndk-version: r26b
