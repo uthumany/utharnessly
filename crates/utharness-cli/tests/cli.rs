@@ -28,6 +28,7 @@ fn run_with_env(
         "TOGETHER_API_KEY",
         "DEEPSEEK_API_KEY",
         "FIREWORKS_API_KEY",
+        "NVIDIA_API_KEY",
     ] {
         command.env_remove(key);
     }
@@ -269,10 +270,12 @@ fn provider_and_agent_commands_report_real_runtime_state_without_secrets() {
     let providers = run(bin, workspace.path(), home.path(), &["providers", "list"]);
     assert!(providers.contains("openrouter"));
     assert!(providers.contains("ollama"));
+    assert!(providers.contains("nvidia"));
     assert!(!providers.contains("test-secret"));
 
     let provider_env = run(bin, workspace.path(), home.path(), &["providers", "env"]);
     assert!(provider_env.contains("GROQ_API_KEY"));
+    assert!(provider_env.contains("NVIDIA_API_KEY"));
     assert!(provider_env.contains("never persisted"));
 
     let agents = run(bin, workspace.path(), home.path(), &["agents", "list"]);

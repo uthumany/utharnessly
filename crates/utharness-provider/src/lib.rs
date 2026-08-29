@@ -15,6 +15,7 @@ pub enum ProviderKind {
     Together,
     DeepSeek,
     Fireworks,
+    Nvidia,
     Ollama,
     Custom,
 }
@@ -28,6 +29,7 @@ impl ProviderKind {
             "together" => Ok(Self::Together),
             "deepseek" => Ok(Self::DeepSeek),
             "fireworks" => Ok(Self::Fireworks),
+            "nvidia" | "nvidia-nim" | "nim" => Ok(Self::Nvidia),
             "ollama" | "local" => Ok(Self::Ollama),
             "custom" | "openai-compatible" => Ok(Self::Custom),
             other => anyhow::bail!("unsupported provider '{other}'"),
@@ -41,6 +43,7 @@ impl ProviderKind {
             Self::Together => "together",
             Self::DeepSeek => "deepseek",
             Self::Fireworks => "fireworks",
+            Self::Nvidia => "nvidia",
             Self::Ollama => "ollama",
             Self::Custom => "custom",
         }
@@ -76,6 +79,11 @@ impl ProviderKind {
                 "https://api.fireworks.ai/inference/v1",
                 "accounts/fireworks/models/llama-v3p3-70b-instruct",
                 Some("FIREWORKS_API_KEY"),
+            ),
+            Self::Nvidia => (
+                "https://integrate.api.nvidia.com/v1",
+                "nvidia/nemotron-3-super-120b-a12b",
+                Some("NVIDIA_API_KEY"),
             ),
             Self::Ollama => ("http://127.0.0.1:11434/v1", "qwen2.5-coder:7b", None),
             Self::Custom => (
@@ -161,6 +169,8 @@ impl Gateway {
             ProviderKind::DeepSeek
         } else if environment_has_value("FIREWORKS_API_KEY") {
             ProviderKind::Fireworks
+        } else if environment_has_value("NVIDIA_API_KEY") {
+            ProviderKind::Nvidia
         } else {
             anyhow::bail!("no AI gateway is configured; set UTHARNESS_PROVIDER or a supported provider API key")
         };
@@ -379,6 +389,7 @@ pub fn supported_providers() -> Vec<ProviderStatus> {
         ProviderKind::Together,
         ProviderKind::DeepSeek,
         ProviderKind::Fireworks,
+        ProviderKind::Nvidia,
         ProviderKind::Ollama,
         ProviderKind::Custom,
     ]
@@ -397,6 +408,7 @@ pub fn has_provider_configuration() -> bool {
             "TOGETHER_API_KEY",
             "DEEPSEEK_API_KEY",
             "FIREWORKS_API_KEY",
+            "NVIDIA_API_KEY",
         ]
         .into_iter()
         .any(environment_has_value)
@@ -437,6 +449,7 @@ mod tests {
     #[test]
     fn provider_names_are_explicit() {
         assert_eq!(ProviderKind::parse("ollama").unwrap(), ProviderKind::Ollama);
+        assert_eq!(ProviderKind::parse("nim").unwrap(), ProviderKind::Nvidia);
         assert!(ProviderKind::parse("unknown").is_err());
     }
     #[test]

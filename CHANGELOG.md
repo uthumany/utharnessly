@@ -4,6 +4,23 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.11] — 2026-08-30
+
+### Added
+
+- Responsive `utharness setup` wizard with Quick, Full, and Blank Slate modes, keyboard-driven provider and capability selectors, credential-presence reporting, and review-before-save behavior.
+- Validated `utharness.json` persistence for provider, model, permission mode, and enabled runtime capabilities, plus a scriptable `--non-interactive` setup path.
+- First-class NVIDIA NIM gateway using the official OpenAI-compatible hosted endpoint, `NVIDIA_API_KEY`, and a Nemotron default model.
+
+### Security
+
+- Setup never writes API keys to configuration; secrets remain environment-only and only credential variable names are reported.
+- Saved capability choices now gate terminal execution and autonomous workspace/Git tools in the native runtime.
+
+### Verification
+
+- Added native setup integration tests, NVIDIA provider regression coverage, UI selector tests, packaged-bundle smoke tests, and real PTY screenshots of the setup workflow.
+
 ## [0.2.10] — 2026-08-30
 
 ### Added

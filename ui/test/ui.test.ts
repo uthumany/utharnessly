@@ -14,6 +14,7 @@ import { modes, providers, recommendedTools, tools } from '../src/setup-data.js'
 test('setup exposes only runtime-backed providers and capabilities', () => {
   assert.deepEqual(modes.map(item => item.id), ['quick', 'full', 'blank']);
   assert.ok(providers.some(item => item.id === 'ollama' && item.key === undefined));
+  assert.ok(providers.some(item => item.id === 'nvidia' && item.key === 'NVIDIA_API_KEY'));
   assert.ok(providers.every(item => item.id !== 'anthropic'));
   assert.ok(tools.every(item => item.risk === 'safe' || item.risk === 'ask'));
   assert.ok(recommendedTools.every(id => tools.some(item => item.id === id)));

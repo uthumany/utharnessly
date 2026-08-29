@@ -28,6 +28,7 @@ export const providers: ProviderOption[] = [
   { id: 'together', label: 'Together AI', description: 'open-model inference API', model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', key: 'TOGETHER_API_KEY' },
   { id: 'deepseek', label: 'DeepSeek', description: 'direct chat and coding models', model: 'deepseek-chat', key: 'DEEPSEEK_API_KEY' },
   { id: 'fireworks', label: 'Fireworks AI', description: 'OpenAI-compatible model API', model: 'accounts/fireworks/models/llama-v3p3-70b-instruct', key: 'FIREWORKS_API_KEY' },
+  { id: 'nvidia', label: 'NVIDIA NIM', description: 'hosted Nemotron models on build.nvidia.com', model: 'nvidia/nemotron-3-super-120b-a12b', key: 'NVIDIA_API_KEY' },
   { id: 'ollama', label: 'Ollama', description: 'local model server; no API key', model: 'qwen2.5-coder:7b' },
   { id: 'custom', label: 'Custom endpoint', description: 'OpenAI-compatible endpoint via UTHARNESS_PROVIDER_URL', model: 'default', key: 'UTHARNESS_API_KEY' }
 ];
@@ -44,4 +45,3 @@ export const tools: ToolOption[] = [
 ];
 
 export const recommendedTools = ['workspace_read', 'git_inspection', 'skills', 'memory'];
-

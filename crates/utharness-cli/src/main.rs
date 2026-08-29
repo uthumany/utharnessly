@@ -1059,11 +1059,11 @@ fn providers(action: ProviderAction) -> Result<()> {
         }
         ProviderAction::Env => {
             println!("AI GATEWAY ENVIRONMENT");
-            println!("UTHARNESS_PROVIDER=openrouter|openai|groq|together|deepseek|fireworks|ollama|custom");
+            println!("UTHARNESS_PROVIDER=openrouter|openai|groq|together|deepseek|fireworks|nvidia|ollama|custom");
             println!("UTHARNESS_MODEL=<provider model id>");
             println!("UTHARNESS_PROVIDER_URL=<HTTPS OpenAI-compatible /v1 endpoint>");
             println!("UTHARNESS_API_KEY=<custom override>");
-            println!("Provider keys: OPENROUTER_API_KEY OPENAI_API_KEY GROQ_API_KEY TOGETHER_API_KEY DEEPSEEK_API_KEY FIREWORKS_API_KEY");
+            println!("Provider keys: OPENROUTER_API_KEY OPENAI_API_KEY GROQ_API_KEY TOGETHER_API_KEY DEEPSEEK_API_KEY FIREWORKS_API_KEY NVIDIA_API_KEY");
             println!("Secrets are read at process start and are never persisted by Utharness.");
         }
     }
