@@ -64,6 +64,7 @@ jobs:
           mkdir -p "dist/package/${root}/ui"
           cp target/release/utharness "dist/package/${root}/utharness"
           cp -R ui/dist "dist/package/${root}/ui/dist"
+          cp ui/package.json "dist/package/${root}/ui/package.json"
           cp README.md LICENSE "dist/package/${root}/"
           tar -C dist/package -czf "dist/${root}.tar.gz" "${root}"
       - name: Package Windows artifact
@@ -74,6 +75,7 @@ jobs:
           New-Item -ItemType Directory -Force "dist/package/$root/ui" | Out-Null
           Copy-Item target/release/utharness.exe "dist/package/$root/utharness.exe"
           Copy-Item ui/dist "dist/package/$root/ui/dist" -Recurse
+          Copy-Item ui/package.json "dist/package/$root/ui/package.json"
           Copy-Item README.md, LICENSE "dist/package/$root/"
           Compress-Archive -Path "dist/package/$root/*" -DestinationPath "dist/$root.zip" -Force
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

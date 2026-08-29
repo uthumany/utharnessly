@@ -16,6 +16,11 @@ All notable changes to utharnessly are documented here.
 - Provider credentials remain process-environment-only and are never written to SQLite or printed by status commands.
 - Plain HTTP provider URLs are rejected except for loopback development endpoints; rejected API response bodies are not echoed.
 
+### Fixed
+
+- Release and Termux UI artifacts now bundle all Node runtime dependencies instead of importing packages from an unavailable `node_modules` directory.
+- Packaged UI directories include their ESM package metadata, eliminating Node's typeless-package warning after installation.
+
 ## [0.2.9] — 2026-08-29
 
 ### Added
