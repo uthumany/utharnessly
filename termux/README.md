@@ -12,7 +12,7 @@ utharness setup
 utharness
 ```
 
-The first command configures the live signed UTHARNESS APT repository. The package is installed and upgraded by Termux’s package manager; UTHARNESS never overwrites files owned by `pkg`. The v0.2.8 repository, signatures, package indexes, packages, and checksums have been verified from the public Pages endpoints. Physical-device, Android-version-specific, and real Termux:API behavior still require testing on an actual Android/Termux environment.
+The first command configures the live signed UTHARNESS APT repository. The package is installed and upgraded by Termux’s package manager; UTHARNESS never overwrites files owned by `pkg`. Repository signatures, package indexes, packages, and checksums are verified during release. Physical-device, Android-version-specific, and real Termux:API behavior still require testing on an actual Android/Termux environment.
 
 ```bash
 pkg update

@@ -1,57 +1,17 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { Spinner } from '@inkjs/ui';
-import figures from 'figures';
 import gradient from 'gradient-string';
 import stringWidth from 'string-width';
 import wrapAnsi from 'wrap-ansi';
-import type { Breakpoint, ColorMode, Message, RuntimeSnapshot, ToolCard } from './types.js';
+import type { ColorMode, Message, OverlayKind, PaletteItem, RuntimeSnapshot, ToolCard } from './types.js';
+import { icon, spinnerFrames } from './tui/icons.js';
+import { bannerGradient, palette, tone } from './tui/theme.js';
 
-export const palette = {
-  background: '#070B14',
-  surface: '#0D1420',
-  border: '#303948',
-  text: '#D8DCE5',
-  muted: '#70798A',
-  amber: '#F6B817',
-  orange: '#FF963F',
-  coral: '#FF5F63',
-  cyan: '#27D3C5',
-  purple: '#D06BFF',
-  green: '#7BD950',
-  error: '#FF5C68'
-} as const;
+export { getBreakpoint, getTermuxBreakpoint } from './tui/responsive.js';
+export { getColorMode, palette } from './tui/theme.js';
 
-const brandGradient = gradient(['#F6B817', '#FF963F', '#FF5F63']);
-
-export function getTermuxBreakpoint(columns: number): Breakpoint {
-  if (columns < 50) return 'mobile';
-  if (columns < 90) return 'narrow';
-  if (columns >= 200) return 'ultra';
-  if (columns >= 120) return 'wide';
-  return 'standard';
-}
-
-export function getBreakpoint(columns: number): Breakpoint {
-  if (columns >= 200) return 'ultra';
-  if (columns >= 120) return 'wide';
-  if (columns >= 80) return 'standard';
-  if (columns >= 60) return 'narrow';
-  return 'compact';
-}
-
-export function getColorMode(): ColorMode {
-  if (process.env.NO_COLOR || process.env.UTHARNESS_ASCII === '1') return 'mono';
-  if (process.env.UTHARNESS_COLOR === 'truecolor' || process.env.COLORTERM?.includes('truecolor')) return 'truecolor';
-  if (process.env.UTHARNESS_COLOR === 'ansi256' || process.env.TERM?.includes('256color')) return 'ansi256';
-  return 'ansi16';
-}
-
-function tone(hex: string, mode: ColorMode): string | undefined {
-  return mode === 'mono' ? undefined : hex;
-}
-
-const wideAscii = [
+const brand = gradient(bannerGradient);
+const fullBanner = [
   '██╗   ██╗████████╗██╗  ██╗ █████╗ ██████╗ ███╗   ██╗███████╗███████╗',
   '██║   ██║╚══██╔══╝██║  ██║██╔══██╗██╔══██╗████╗  ██║██╔════╝██╔════╝',
   '██║   ██║   ██║   ███████║███████║██████╔╝██╔██╗ ██║█████╗  ███████╗',
@@ -59,167 +19,59 @@ const wideAscii = [
   '╚██████╔╝   ██║   ██║  ██║██║  ██║██║  ██║██║ ╚████║███████╗███████║',
   ' ╚═════╝    ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝'
 ];
+const mediumBanner = ['█ █ █▀█ █▀█ █▄ █ █▀▀ █▀▀ █▀▀', '█▄█ █▀  █▀▄ █ ▀█ ██▄ ▄██ ▄██'];
 
-const mediumAscii = [
-  '██╗   ██╗████████╗██╗  ██╗ █████╗ ██████╗',
-  '██║   ██║╚══██╔══╝██║  ██║██╔══██╗██╔══██╗',
-  '██║   ██║   ██║   ███████║███████║██████╔╝',
-  '██║   ██║   ██║   ██╔══██║██╔══██║██╔══██╗',
-  '╚██████╔╝   ██║   ██║  ██║██║  ██║██║  ██║',
-  ' ╚═════╝    ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝'
-];
-
-const compactAscii = ['UTHARNESS', 'AGENT TERMINAL'];
-
-export function Banner({ breakpoint, colorMode }: { breakpoint: Breakpoint; colorMode: ColorMode }) {
-  const lines = breakpoint === 'mobile' || breakpoint === 'compact' ? compactAscii : breakpoint === 'narrow' ? ['UTHARNESS', 'AGENT TERMINAL'] : breakpoint === 'standard' ? mediumAscii : wideAscii;
-  return (
-    <Box flexDirection="column" marginTop={1} marginBottom={1}>
-      {breakpoint === 'mobile' || breakpoint === 'compact' ? (
-        <Text color={colorMode === 'mono' ? undefined : palette.amber}>{['UTHARNESS', 'AGENT TERMINAL'].join(String.fromCharCode(10))}</Text>
-      ) : lines.map((line, index) => (
-        <Text key={`${line}-${index}`}>
-          {colorMode === 'mono' ? line : brandGradient(line)}
-        </Text>
-      ))}
-    </Box>
-  );
+export function Banner({ variant, colorMode }: { variant: 'full' | 'medium' | 'small' | 'tiny' | 'hide'; colorMode: ColorMode }) {
+  if (variant === 'hide') return null;
+  const lines = variant === 'full' ? fullBanner : variant === 'medium' ? mediumBanner : variant === 'small' ? ['UTHARNESS'] : ['UTH'];
+  return <Box flexDirection="column" marginBottom={1}>{lines.map((line, index) => <Text key={`${index}-${line}`} bold={variant === 'small' || variant === 'tiny'} color={colorMode === 'mono' ? undefined : palette.warning}>{colorMode === 'mono' ? line : brand(line)}</Text>)}</Box>;
 }
 
-export function PersistentHeader({ breakpoint, colorMode, platform }: { breakpoint: Breakpoint; colorMode: ColorMode; platform?: string }) {
-  const muted = tone(palette.muted, colorMode);
-  return (
-    <Box width="100%" justifyContent="space-between" borderStyle="single" borderColor={tone(palette.border, colorMode)} paddingX={1}>
-      <Text color={tone(palette.text, colorMode)} bold>{breakpoint === 'mobile' || breakpoint === 'compact' ? 'UTHARNESS · focus mode' : `UTHARNESS AGENT — ${platform === 'termux' ? 'Termux · ' : ''}focus mode`}</Text>
-      {breakpoint === 'mobile' || breakpoint === 'compact' ? <Text color={muted}>⌘K · ?</Text> : <Text color={muted}>{platform === 'termux' ? '↑↓ navigate · Enter select' : '⌘K commands    ? help'}</Text>}
-    </Box>
-  );
+export function Header({ mode, colorMode, compact }: { mode: string; colorMode: ColorMode; compact: boolean }) {
+  return <Box width="100%" justifyContent="space-between"><Text color={tone(palette.text, colorMode)} bold>utharness-agent — {mode} mode</Text><Text color={tone(palette.muted, colorMode)}>{compact ? 'F1 help' : 'Ctrl+K commands   F1 help'}</Text></Box>;
 }
 
-export function StartupTips({ colorMode, termux = false }: { colorMode: ColorMode; termux?: boolean }) {
-  return (
-    <Box flexDirection="column" marginBottom={1}>
-      <Text color={tone(palette.amber, colorMode)} bold>Tips for getting started:</Text>
-      <Text color={tone(palette.text, colorMode)}>1. Ask questions, edit files, or run commands.</Text>
-      <Text color={tone(palette.text, colorMode)}>2. Be specific for the best results.</Text>
-      <Text color={tone(palette.text, colorMode)}>3. Use <Text color={tone(palette.cyan, colorMode)}>@path/to/file</Text> to add context.</Text>
-      <Text color={tone(palette.text, colorMode)}>4. Type <Text color={tone(palette.purple, colorMode)}>/help</Text> for more information.</Text>
-      {termux ? <Text color={tone(palette.cyan, colorMode)}>Termux: Ctrl+K commands · Ctrl+S skills · Tab/Enter select · Esc back</Text> : null}
-    </Box>
-  );
+export function StartupTips({ colorMode }: { colorMode: ColorMode }) {
+  return <Box flexDirection="column" marginBottom={1}><Text color={tone(palette.warning, colorMode)} bold>Tips for getting started:</Text><Text color={tone(palette.text, colorMode)}>1. Ask questions, edit files, or run commands.</Text><Text color={tone(palette.text, colorMode)}>2. Use <Text color={tone(palette.primary, colorMode)}>@path/to/file</Text> to add context.</Text><Text color={tone(palette.text, colorMode)}>3. Type <Text color={tone(palette.accent, colorMode)}>/help</Text> or press F1.</Text></Box>;
 }
 
 export function WorkspaceWarning({ colorMode }: { colorMode: ColorMode }) {
-  return (
-    <Box borderStyle="round" borderColor={tone(palette.amber, colorMode)} paddingX={1} marginBottom={1}>
-      <Text color={tone(palette.amber, colorMode)}>{figures.warning}  You are not in a project-specific directory.\n   For best results, open a workspace folder with your code and run utharness there.</Text>
-    </Box>
-  );
+  return <Box borderStyle="round" borderColor={tone(palette.warning, colorMode)} paddingX={1} marginBottom={1}><Text color={tone(palette.warning, colorMode)}>{icon('warning')}  You are not in a project-specific directory.{String.fromCharCode(10)}   Open a workspace folder and run utharness there for best results.</Text></Box>;
 }
 
-function toolColor(tool: ToolCard, colorMode: ColorMode): string | undefined {
-  if (tool.state === 'error') return tone(palette.error, colorMode);
-  if (tool.state === 'approval') return tone(palette.amber, colorMode);
-  if (tool.state === 'running') return tone(palette.cyan, colorMode);
-  return tone(palette.green, colorMode);
+function toolTone(tool: ToolCard, mode: ColorMode) { if (tool.state === 'error') return tone(palette.error, mode); if (tool.state === 'approval') return tone(palette.warning, mode); if (tool.state === 'running') return tone(palette.primary, mode); if (tool.state === 'waiting') return tone(palette.muted, mode); return tone(palette.success, mode); }
+export function ToolCardView({ tool, width, colorMode, tick = 0 }: { tool: ToolCard; width: number; colorMode: ColorMode; tick?: number }) {
+  const status = tool.state === 'running' ? `${spinnerFrames[tick % spinnerFrames.length]} Running` : tool.state === 'approval' ? '! Approval required' : tool.state === 'error' ? '✗ Error' : tool.state === 'waiting' ? '○ Waiting' : '✓ Completed';
+  return <Box borderStyle="round" borderColor={tone(tool.state === 'running' ? palette.borderFocus : palette.border, colorMode)} paddingX={1} width={Math.max(22, Math.min(width, 82))} flexDirection="column"><Box justifyContent="space-between"><Text color={tone(palette.agent, colorMode)} bold>{tool.kind ?? 'TOOL'}  {tool.name}</Text><Text color={toolTone(tool, colorMode)}>{status}</Text></Box>{tool.state !== 'completed' && tool.detail ? <Text color={tone(palette.text, colorMode)}>{tool.detail}</Text> : null}<Text color={tone(palette.muted, colorMode)}>{tool.metric}{tool.elapsed ? `  ${tool.elapsed}` : ''}</Text></Box>;
 }
 
-export function SkillManager({ text, width, colorMode }: { text: string; width: number; colorMode: ColorMode }) {
-  const color = tone(palette.purple, colorMode);
-  const lines = text.split(/\r?\n/).slice(0, 18);
-  return (
-    <Box borderStyle="round" borderColor={color} paddingX={1} flexDirection="column" width={Math.min(Math.max(28, width), 92)}>
-      <Text color={color} bold>SKILL MANAGER · indexed registry</Text>
-      <Text color={tone(palette.muted, colorMode)}>Ctrl+S opens this view · use /skills search &lt;query&gt; for ranked results</Text>
-      {lines.map((line, index) => <Text key={`${index}-${line}`} color={index === 0 ? tone(palette.cyan, colorMode) : tone(palette.text, colorMode)} wrap="truncate-end">{line}</Text>)}
-      <Text color={tone(palette.muted, colorMode)}>Install is lazy and review-gated · external skills remain metadata-only until explicitly allowed</Text>
-    </Box>
-  );
-}
-
-export function ToolCardView({ tool, width, colorMode }: { tool: ToolCard; width: number; colorMode: ColorMode }) {
-  const cardWidth = Math.max(28, Math.min(78, width - 8));
-  const color = toolColor(tool, colorMode);
-  const statusLabel = tool.state === 'running' ? 'Running' : tool.state === 'error' ? 'Error' : tool.state === 'approval' ? 'Approval required' : 'Completed';
-  if (width < 100) {
-    const compact = `${tool.icon} ${tool.name}  ${tool.state === 'running' ? 'Running' : tool.state === 'error' ? 'Error' : tool.state === 'approval' ? 'Approval' : 'Completed'}  ${tool.metric}  ${tool.elapsed}`;
-    return (
-      <Box width={cardWidth} borderStyle="round" borderColor={tone(palette.border, colorMode)} paddingX={1} marginTop={1}>
-          <Text color={toolColor(tool, colorMode)} wrap="truncate-end">{compact}</Text>
-      </Box>
-    );
-  }
-  return (
-    <Box flexDirection="column" width={cardWidth} borderStyle="round" borderColor={tone(palette.border, colorMode)} paddingX={1} marginTop={1}>
-      <Box flexDirection="row" width={Math.max(10, cardWidth - 2)}>
-        <Box width={Math.max(12, Math.floor((cardWidth - 2) * 0.38))}>
-          <Text color={tone(palette.purple, colorMode)} wrap="truncate-end">{tool.icon} {tool.name}</Text>
-        </Box>
-        <Box width={Math.max(12, Math.floor((cardWidth - 2) * 0.28))}>
-          {tool.state === 'running' ? <Spinner label="Running" type="dots" /> : <Text color={color} wrap="truncate-end">{statusLabel}</Text>}
-        </Box>
-        <Box flexGrow={1} justifyContent="flex-end">
-          <Text color={tone(palette.text, colorMode)} wrap="truncate-end">{tool.metric}  {tool.elapsed}</Text>
-        </Box>
-      </Box>
-    </Box>
-  );
-}
-
-export function MessageRow({ message, width, colorMode }: { message: Message; width: number; colorMode: ColorMode }) {
-  const isUthy = message.role === 'uthy';
-  const avatarColor = isUthy ? palette.purple : palette.cyan;
-  const name = isUthy ? 'UTHY' : 'YOU';
-  const messageWidth = Math.max(12, width - 6);
-  const messageText = stringWidth(message.text) > messageWidth ? wrapAnsi(message.text, messageWidth, { hard: true }) : message.text;
-  return (
-    <Box flexDirection="column" marginBottom={1} width={Math.max(20, width)}>
-      <Text>
-        <Text color={tone(avatarColor, colorMode)} bold>{isUthy ? '◉' : '◌'}  {name}</Text>
-        {width >= 60 ? <Text color={tone(palette.muted, colorMode)}>{' '.repeat(Math.max(1, width - 16 - message.time.length))}{message.time}</Text> : null}
-        {String.fromCharCode(10)}{' '.repeat(4)}<Text color={tone(palette.text, colorMode)}>{messageText}</Text>
-      </Text>
-      {message.tool ? <Box paddingLeft={4}><ToolCardView tool={message.tool} width={width} colorMode={colorMode} /></Box> : null}
-      {message.tool?.state === 'completed' && message.text.startsWith('Here are') ? <Box paddingLeft={5}><Text color={tone(palette.green, colorMode)}>{figures.arrowRight} results displayed to you</Text></Box> : null}
-    </Box>
-  );
-}
-
-export function PromptFrame({ width, colorMode, children }: { width: number; colorMode: ColorMode; children: React.ReactNode }) {
-  return (
-    <Box borderStyle="round" borderColor={tone(palette.cyan, colorMode)} paddingX={1} width={Math.max(24, width)} marginTop={1}>
-      <Text color={tone(palette.cyan, colorMode)}>{figures.pointer} </Text>
-      {children}
-    </Box>
-  );
+const roleMeta = (role: Message['role']) => ({
+  utharness: ['UTHARNESS', palette.agent, '◉'], you: ['YOU', palette.primary, '○'], system: ['SYSTEM', palette.warning, '!'],
+  agent: ['AGENT', palette.agent, '◆'], tool: ['TOOL', palette.tool, '⚙'], memory: ['MEMORY', palette.accent, '◫'], error: ['ERROR', palette.error, '✗']
+} as const)[role];
+export function MessageRow({ message, width, colorMode, tick }: { message: Message; width: number; colorMode: ColorMode; tick: number }) {
+  const [name, color, marker] = roleMeta(message.role);
+  const bodyWidth = Math.max(16, width - 5);
+  const body = stringWidth(message.text) > bodyWidth ? wrapAnsi(message.text, bodyWidth, { hard: true }) : message.text;
+  return <Box flexDirection="column" marginBottom={1} width={width}><Box justifyContent="space-between"><Text color={tone(color, colorMode)} bold>{marker}  {name}</Text><Text color={tone(palette.muted, colorMode)}>{message.time}</Text></Box><Box paddingLeft={4}><Text color={tone(palette.text, colorMode)}>{body}</Text></Box>{message.tool ? <Box paddingLeft={4} marginTop={1}><ToolCardView tool={message.tool} width={bodyWidth} colorMode={colorMode} tick={tick} /></Box> : null}</Box>;
 }
 
 export function StatusBar({ snapshot, width, colorMode }: { snapshot: RuntimeSnapshot; width: number; colorMode: ColorMode }) {
-  if (width < 100) {
-    const compact = `${snapshot.workspace}  │  ${snapshot.permission}  │  ${snapshot.provider}/${snapshot.model}  │  ${snapshot.branch}  │  ${snapshot.context}${snapshot.platform === 'termux' ? `  │  API:${snapshot.termuxApi}` : ''}`;
-    return (
-      <Box borderStyle="single" borderColor={tone(palette.border, colorMode)} paddingX={1} marginTop={1} width={Math.max(24, width)}>
-        <Text color={tone(palette.cyan, colorMode)} wrap="truncate-end">{compact}</Text>
-      </Box>
-    );
-  }
-  const segments = [
-    ['▣', snapshot.workspace, palette.cyan],
-    ['◈', snapshot.permission, palette.amber],
-    ['✦', `${snapshot.provider}/${snapshot.model}`, palette.purple],
-    ['⌘', snapshot.branch, palette.green],
-    ['≡', snapshot.context, palette.cyan],
-    ...(snapshot.platform === 'termux' ? [['⌁', `Termux/${snapshot.termuxApi}`, palette.cyan]] : [])
-  ];
-  return (
-    <Box borderStyle="single" borderColor={tone(palette.border, colorMode)} paddingX={1} marginTop={1} width={Math.max(24, width)}>
-      {segments.map(([icon, value, color], index) => (
-        <React.Fragment key={`${icon}-${value}`}>
-          <Text color={tone(color as string, colorMode)}>{icon} {value}</Text>
-          {index < segments.length - 1 ? <Text color={tone(palette.muted, colorMode)}>  │  </Text> : null}
-        </React.Fragment>
-      ))}
-      {width >= 120 ? <><Text color={tone(palette.muted, colorMode)}>  │  </Text><Text color={tone(snapshot.network === 'connected' ? palette.green : palette.muted, colorMode)}>{snapshot.network}</Text></> : null}
-    </Box>
-  );
+  const git = `${snapshot.git.branch}${snapshot.git.modified || snapshot.git.untracked ? ` M${snapshot.git.modified} ?${snapshot.git.untracked}` : ''}${snapshot.git.additions || snapshot.git.deletions ? ` +${snapshot.git.additions} -${snapshot.git.deletions}` : ''}`;
+  const segments = [snapshot.workspace, snapshot.permission, `${snapshot.provider}/${snapshot.model}`, git, snapshot.context, snapshot.activeAgents ? `Agents ${snapshot.activeAgents}` : 'Agents 0'];
+  return <Box borderStyle="single" borderColor={tone(palette.border, colorMode)} paddingX={1} width={Math.max(20, width)}><Text color={tone(palette.primary, colorMode)} wrap="truncate-end">{segments.join('  │  ')}</Text></Box>;
+}
+
+export function Navigation({ colorMode, width }: { colorMode: ColorMode; width: number }) {
+  const items = [['chat', 'Chat'], ['task', 'Tasks'], ['file', 'Files'], ['agent', 'Agents'], ['skill', 'Skills'], ['memory', 'Memory'], ['job', 'Jobs'], ['model', 'Models'], ['tool', 'Tools'], ['logs', 'Logs'], ['settings', 'Settings']] as const;
+  return <Box width={width} borderStyle="single" borderColor={tone(palette.border, colorMode)} flexDirection="column" paddingX={1}><Text bold color={tone(palette.primary, colorMode)}>WORKSPACE</Text>{items.map(([glyph, label], index) => <Text key={label} color={tone(index === 0 ? palette.borderFocus : palette.muted, colorMode)}>{index === 0 ? '›' : ' '} {icon(glyph)} {label}</Text>)}</Box>;
+}
+
+export function Inspector({ snapshot, colorMode, width }: { snapshot: RuntimeSnapshot; colorMode: ColorMode; width: number }) {
+  return <Box width={width} borderStyle="single" borderColor={tone(palette.border, colorMode)} flexDirection="column" paddingX={1}><Text color={tone(palette.accent, colorMode)} bold>TASK  CONTEXT  AGENTS</Text><Text color={tone(palette.muted, colorMode)}>Active task</Text><Text color={tone(palette.text, colorMode)}>Idle — ready for input</Text><Text color={tone(palette.muted, colorMode)}>Provider / model</Text><Text color={tone(palette.text, colorMode)} wrap="truncate-end">{snapshot.provider}/{snapshot.model}</Text><Text color={tone(palette.muted, colorMode)}>Git</Text><Text color={tone(palette.success, colorMode)}>{snapshot.git.branch} · {snapshot.git.modified + snapshot.git.untracked} changes</Text></Box>;
+}
+
+export function Overlay({ kind, items, selected, query, width, colorMode }: { kind: Exclude<OverlayKind, null>; items: PaletteItem[]; selected: number; query: string; width: number; colorMode: ColorMode }) {
+  const title = kind.toUpperCase();
+  return <Box borderStyle="round" borderColor={tone(palette.accent, colorMode)} paddingX={1} width={Math.max(28, Math.min(width, 78))} flexDirection="column"><Box justifyContent="space-between"><Text color={tone(palette.accent, colorMode)} bold>{title}</Text><Text color={tone(palette.muted, colorMode)}>Esc close</Text></Box>{query ? <Text color={tone(palette.primary, colorMode)}>⌕ {query}</Text> : null}{items.slice(0, 12).map((item, index) => <Box key={item.id} justifyContent="space-between"><Text color={tone(index === selected ? palette.borderFocus : palette.text, colorMode)}>{index === selected ? '› ' : '  '}{item.label}  <Text color={tone(palette.muted, colorMode)}>{item.description}</Text></Text><Text color={tone(palette.muted, colorMode)}>{item.shortcut ?? ''}</Text></Box>)}{items.length === 0 ? <Text color={tone(palette.muted, colorMode)}>No matching items</Text> : null}<Text color={tone(palette.muted, colorMode)}>↑/↓ select · Enter open · Esc close</Text></Box>;
 }

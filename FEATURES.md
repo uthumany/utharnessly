@@ -1,6 +1,6 @@
 # UTHARNESS Feature Inventory
 
-**QA target:** published source and package line 0.2.8.
+**QA target:** source and package line 0.2.9.
 
 This inventory describes implemented behavior only. A platform is marked tested only when the corresponding runtime or CI environment actually executed it.
 

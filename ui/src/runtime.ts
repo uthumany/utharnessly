@@ -11,7 +11,6 @@ const runtimeSchema = z.object({
   permission: z.string(),
   provider: z.string(),
   model: z.string(),
-  branch: z.string(),
   context: z.string(),
   network: z.string(),
   projectSpecific: z.boolean(),
@@ -22,35 +21,28 @@ const runtimeSchema = z.object({
   storage: z.string(),
   messages: z.array(z.object({
     id: z.string(),
-    role: z.enum(['uthy', 'you']),
+    role: z.enum(['utharness', 'you', 'system', 'agent', 'tool', 'memory', 'error']),
     text: z.string(),
     time: z.string(),
     tool: z.object({
       id: z.string(),
       name: z.string(),
       icon: z.string(),
-      state: z.enum(['running', 'completed', 'error', 'approval']),
+      state: z.enum(['waiting', 'running', 'completed', 'error', 'approval']),
       result: z.string(),
       metric: z.string(),
       elapsed: z.string()
     }).optional()
-  }))
+  })),
+  git: z.object({ branch: z.string(), modified: z.number(), untracked: z.number(), additions: z.number(), deletions: z.number() }),
+  activeAgents: z.number()
 });
 
 const now = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const id = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-const sampleMessages = (): Message[] => [
-  { id: id(), role: 'uthy', text: "Hello! I'm UTHY, your terminal agent. How can I help you today?", time: now() },
-  { id: id(), role: 'you', text: 'List the top 5 largest TypeScript files in this repo.', time: now() },
-  {
-    id: id(), role: 'uthy', text: "I'll scan the repository and find the largest TypeScript files.", time: now(),
-    tool: { id: id(), name: 'read_directory', icon: '▱', state: 'completed', result: 'Completed', metric: '1,842 files', elapsed: '120ms' }
-  },
-  {
-    id: id(), role: 'uthy', text: 'Here are the top 5 largest TypeScript files:', time: now(),
-    tool: { id: id(), name: 'list_large_files', icon: '</>', state: 'completed', result: 'Completed', metric: '5 results', elapsed: '88ms' }
-  }
+const initialMessages = (): Message[] => [
+  { id: id(), role: 'utharness', text: 'Ready. Ask a question, reference @files, or run a slash command.', time: now() }
 ];
 
 async function commandOutput(command: string, args: string[], cwd: string): Promise<string> {
@@ -64,9 +56,11 @@ function runtimeBinary(): string {
 
 export async function loadSnapshot(cwd = process.cwd()): Promise<RuntimeSnapshot> {
   const home = os.homedir();
-  const [branch, gitRoot, androidVersion, apiCommand] = await Promise.all([
+  const [branch, gitRoot, porcelain, diffStats, androidVersion, apiCommand] = await Promise.all([
     commandOutput('git', ['branch', '--show-current'], cwd),
     commandOutput('git', ['rev-parse', '--show-toplevel'], cwd),
+    commandOutput('git', ['status', '--porcelain'], cwd),
+    commandOutput('git', ['diff', '--numstat'], cwd),
     commandOutput('getprop', ['ro.build.version.release'], cwd),
     commandOutput('sh', ['-lc', 'command -v termux-battery-status'], cwd)
   ]);
@@ -87,7 +81,6 @@ export async function loadSnapshot(cwd = process.cwd()): Promise<RuntimeSnapshot
     permission: process.env.UTHARNESS_PERMISSION ?? 'offline (default deny)',
     provider,
     model: process.env.UTHARNESS_MODEL ?? 'gpt-4o-mini',
-    branch: branch || 'no-branch',
     context: process.env.UTHARNESS_CONTEXT ?? '128K context left',
     network: process.env.OPENROUTER_API_KEY ? 'connected' : 'offline',
     projectSpecific: Boolean(gitRoot),
@@ -96,9 +89,25 @@ export async function loadSnapshot(cwd = process.cwd()): Promise<RuntimeSnapshot
     prefix: process.env.PREFIX ?? '',
     termuxApi: apiCommand ? 'available' : 'optional/missing',
     storage,
-    messages: sampleMessages()
+    git: parseGitSnapshot(branch, porcelain, diffStats),
+    activeAgents: Number.parseInt(process.env.UTHARNESS_ACTIVE_AGENTS ?? '0', 10) || 0,
+    messages: initialMessages()
   } satisfies RuntimeSnapshot;
   return runtimeSchema.parse(snapshot);
+}
+
+export function parseGitSnapshot(branch: string, porcelain: string, diffStats: string) {
+  const statusLines = porcelain.split(/\r?\n/).filter(Boolean);
+  const untracked = statusLines.filter(line => line.startsWith('??')).length;
+  const modified = statusLines.length - untracked;
+  let additions = 0;
+  let deletions = 0;
+  for (const line of diffStats.split(/\r?\n/).filter(Boolean)) {
+    const [added, removed] = line.split(/\s+/);
+    if (added !== '-') additions += Number.parseInt(added ?? '0', 10) || 0;
+    if (removed !== '-') deletions += Number.parseInt(removed ?? '0', 10) || 0;
+  }
+  return { branch: branch || 'no-branch', modified, untracked, additions, deletions };
 }
 
 export async function runSkillCommand(args: string[], cwd = process.cwd()): Promise<string> {
@@ -123,16 +132,9 @@ export async function submitPrompt(prompt: string, cwd = process.cwd()): Promise
     commandResult = '';
   }
 
-  if (prompt.toLowerCase().includes('largest') && prompt.toLowerCase().includes('typescript')) {
-    return {
-      text: 'Here are the top 5 largest TypeScript files:',
-      tool: { id: id(), name: 'list_large_files', icon: '</>', state: 'completed', result: 'Completed', metric: '5 results', elapsed: '88ms' }
-    };
-  }
-
   return {
     text: commandResult || `I received: “${prompt}”\n\nI can inspect files, review Git state, and run bounded SAFE tasks from this terminal.`,
-    tool: { id: id(), name: 'agent_response', icon: '✦', state: 'completed', result: 'Completed', metric: 'offline planner', elapsed: '42ms' }
+    tool: commandResult ? undefined : { id: id(), kind: 'AGENT', name: 'agent_response', icon: '✦', state: 'completed', result: 'Completed', metric: 'offline planner', elapsed: '42ms' }
   };
 }
 

@@ -4,10 +4,10 @@ import pyte
 from PIL import Image, ImageDraw, ImageFont
 
 COLORS = {
-    'default': (216, 220, 229), 'black': (7, 11, 20), 'red': (255, 92, 104),
-    'green': (123, 217, 80), 'yellow': (246, 184, 23), 'blue': (120, 173, 255),
-    'magenta': (208, 107, 255), 'cyan': (39, 211, 197), 'white': (216, 220, 229),
-    'darkgray': (112, 121, 138), 'lightgray': (216, 220, 229)
+    'default': (232, 237, 243), 'black': (10, 13, 18), 'red': (255, 93, 115),
+    'green': (77, 219, 138), 'yellow': (245, 197, 66), 'blue': (73, 215, 255),
+    'magenta': (169, 112, 255), 'cyan': (65, 217, 255), 'white': (232, 237, 243),
+    'darkgray': (129, 144, 163), 'lightgray': (232, 237, 243)
 }
 
 def color(value, default):
@@ -26,12 +26,12 @@ def render(path):
     pyte.Stream(screen).feed(open(path, 'rb').read().decode('utf-8', errors='replace'))
     font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf', 14)
     cw, ch = 9, 19
-    image = Image.new('RGB', (cols * cw, rows * ch), (7, 11, 20))
+    image = Image.new('RGB', (cols * cw, rows * ch), (10, 13, 18))
     draw = ImageDraw.Draw(image)
     for y in range(rows):
         for x, cell in screen.buffer[y].items():
-            bg = color(cell.bg, (7, 11, 20))
-            fg = color(cell.fg, (216, 220, 229))
+            bg = color(cell.bg, (10, 13, 18))
+            fg = color(cell.fg, (232, 237, 243))
             draw.rectangle((x*cw, y*ch, (x+1)*cw, (y+1)*ch), fill=bg)
             if cell.data != ' ':
                 draw.text((x*cw, y*ch-1), cell.data, font=font, fill=fg)

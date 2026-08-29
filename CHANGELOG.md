@@ -4,6 +4,25 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.9] — 2026-08-29
+
+### Added
+
+- Responsive focus and workspace TUI modes with navigation, task inspector, role-separated transcripts, real Git telemetry, persistent preferences, multiline composer editing, and compact Termux layouts.
+- Command, model, file, agent, task, memory, job, and log overlays with keyboard navigation and slash-command entry points.
+- Deterministic PTY screenshot coverage at 40×15 through 160×50, including command-palette and workspace captures.
+
+### Fixed
+
+- Removed fabricated demo transcript and tool results from the runtime UI; startup and status content now reflect real local state.
+- Hardened terminal color fallback, short-height layout, workspace column sizing, capture lifecycle, and asynchronous snapshot rendering.
+- Updated the UI toolchain to pnpm 11 with explicit dependency build-script allowlisting.
+
+### Verification
+
+- UI type checking, nine behavior tests, production bundling, Rust formatting, strict Clippy, all workspace tests, and release compilation pass locally.
+- NPM, PyPI, shell, Termux, and native release-package validation is coordinated under the 0.2.9 release line.
+
 ### Added
 
 - Termux-native command family: `termux info`, `termux setup`, `termux api`, `termux keys install`, `termux storage enable`, `termux permissions`, and `termux doctor`.
@@ -65,4 +84,5 @@ Provider credentials are never committed or persisted by the runtime. The intera
 Published native release artifacts target Linux x64, macOS x64, and Windows x64; the v0.2.7 Termux release adds signed Android `aarch64` and `x86_64` packages. iOS/iPadOS, FreeBSD, desktop ARM variants, Homebrew, apt, Nix, winget, and other unlisted package ecosystems use source or remote-host guidance rather than fabricated product packages.
 
 [0.2.7]: https://github.com/uthumany/utharnessly/releases/tag/v0.2.7
+[0.2.9]: https://github.com/uthumany/utharnessly/releases/tag/v0.2.9
 [0.1.0]: https://github.com/uthumany/utharnessly/releases/tag/v0.1.0

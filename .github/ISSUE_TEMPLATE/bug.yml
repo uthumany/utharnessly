@@ -12,7 +12,7 @@ body:
   - type: input
     attributes:
       label: Version
-      placeholder: utharness 0.2.8
+      placeholder: utharness 0.2.9
     validations:
       required: true
   - type: textarea
