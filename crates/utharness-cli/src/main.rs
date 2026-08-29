@@ -996,7 +996,6 @@ fn update() -> Result<()> {
         println!("Release archive installation detected.");
         println!("Run the verified PowerShell installer:");
         println!("  irm https://raw.githubusercontent.com/uthumany/utharnessly/main/packaging/install.ps1 | iex");
-        return Ok(());
     }
 
     #[cfg(not(windows))]
