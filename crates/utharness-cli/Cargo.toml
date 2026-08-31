@@ -20,6 +20,7 @@ sha2.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 uuid.workspace = true
+wait-timeout.workspace = true
 utharness-core = { path = "../utharness-core" }
 utharness-security = { path = "../utharness-security" }
 utharness-provider = { path = "../utharness-provider" }

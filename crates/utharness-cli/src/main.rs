@@ -18,6 +18,7 @@ use utharness_storage::Storage;
 
 mod banner;
 mod execution;
+mod setup_system;
 mod skills;
 mod termux;
 
@@ -49,7 +50,7 @@ enum CommandKind {
     Run(RunArgs),
     Tui(TuiArgs),
     Autonomous(AutonomousArgs),
-    Doctor,
+    Doctor(DoctorArgs),
     Update,
     Uninstall,
     Config {
@@ -66,10 +67,11 @@ enum CommandKind {
     },
     Checkpoint,
     Skills(SkillsArgs),
+    #[command(alias = "provider")]
     Providers(ProviderArgs),
     Agents(AgentArgs),
     Tools,
-    Models,
+    Models(ModelArgs),
     Mcp,
     Termux(TermuxArgs),
 }
@@ -87,13 +89,58 @@ struct SetupArgs {
     non_interactive: bool,
     #[arg(long, default_value = "quick")]
     mode: String,
+    #[arg(long, conflicts_with_all = ["full", "developer", "local_ai", "custom", "blank"])]
+    quick: bool,
+    #[arg(long, conflicts_with_all = ["quick", "developer", "local_ai", "custom", "blank"])]
+    full: bool,
+    #[arg(long, conflicts_with_all = ["quick", "full", "local_ai", "custom", "blank"])]
+    developer: bool,
+    #[arg(long, conflicts_with_all = ["quick", "full", "developer", "custom", "blank"])]
+    local_ai: bool,
+    #[arg(long, conflicts_with_all = ["quick", "full", "developer", "local_ai", "blank"])]
+    custom: bool,
+    #[arg(long, conflicts_with_all = ["quick", "full", "developer", "local_ai", "custom"])]
+    blank: bool,
+    /// Print a machine-readable environment and dependency scan, then exit.
+    #[arg(long)]
+    scan: bool,
     #[arg(long)]
     provider: Option<String>,
     #[arg(long)]
     model: Option<String>,
+    #[arg(long)]
+    provider_url: Option<String>,
+    /// Read one API key from stdin, avoiding shell history and process arguments.
+    #[arg(long)]
+    api_key_stdin: bool,
+    #[arg(long)]
+    skip_validation: bool,
+    #[arg(long)]
+    import_config: Option<PathBuf>,
     /// Comma-separated capability identifiers.
     #[arg(long, value_delimiter = ',')]
     tools: Vec<String>,
+}
+
+#[derive(Args, Debug)]
+struct DoctorArgs {
+    #[arg(long)]
+    fix: bool,
+}
+
+#[derive(Args, Debug)]
+struct ModelArgs {
+    #[command(subcommand)]
+    action: Option<ModelAction>,
+}
+
+#[derive(Subcommand, Debug)]
+enum ModelAction {
+    List,
+    Test {
+        #[arg(default_value = "auto")]
+        provider: String,
+    },
 }
 
 const SETUP_TOOLS: &[&str] = &[
@@ -391,6 +438,7 @@ fn main() -> Result<()> {
         .with_target(false)
         .compact()
         .init();
+    setup_system::load_secrets()?;
     let cli = Cli::parse();
     if cli.no_banner {
         env::set_var("UTHARNESS_BANNER", "hide");
@@ -432,7 +480,7 @@ fn main() -> Result<()> {
         Some(CommandKind::Run(args)) => run_command(args),
         Some(CommandKind::Tui(args)) => launch_tui(args.headless),
         Some(CommandKind::Autonomous(args)) => autonomous(args),
-        Some(CommandKind::Doctor) => doctor(),
+        Some(CommandKind::Doctor(args)) => doctor(args),
         Some(CommandKind::Update) => update(),
         Some(CommandKind::Uninstall) => uninstall(),
         Some(CommandKind::Config { action }) => match action.unwrap_or(ConfigAction::Show) {
@@ -451,7 +499,7 @@ fn main() -> Result<()> {
             println!("TOOLS\n✓ read_file       SAFE\n✓ list_directory  SAFE\n! write_file      ASK\n! shell           ASK\n! browser_open    ASK\n✓ git_diff        SAFE");
             Ok(())
         }
-        Some(CommandKind::Models) => models(),
+        Some(CommandKind::Models(args)) => models(args.action.unwrap_or(ModelAction::List)),
         Some(CommandKind::Mcp) => mcp(),
         Some(CommandKind::Termux(args)) => termux_command(args),
     }
@@ -932,7 +980,12 @@ fn checkpoint() -> Result<()> {
     Ok(())
 }
 
-fn doctor() -> Result<()> {
+fn doctor(args: DoctorArgs) -> Result<()> {
+    if args.fix {
+        fs::create_dir_all(setup_system::home()?)?;
+        println!("UTHARNESS DOCTOR --FIX");
+        println!("✓ repaired      user configuration directory");
+    }
     let app = App::open(".")?;
     println!("UTHARNESS DOCTOR");
     println!("✓ version       {}", VERSION);
@@ -945,12 +998,41 @@ fn doctor() -> Result<()> {
         env::var("SHELL").unwrap_or_else(|_| "sh".into())
     );
     match Gateway::from_environment() {
-        Ok(provider) => println!(
-            "✓ provider      {}/{} configured",
-            provider.provider(),
-            provider.model()
-        ),
+        Ok(provider) => match provider.validate_model() {
+            Ok(()) => println!(
+                "✓ provider      {}/{} validated",
+                provider.provider(),
+                provider.model()
+            ),
+            Err(error) => println!(
+                "! provider      {}/{}: {error}",
+                provider.provider(),
+                provider.model()
+            ),
+        },
         Err(_) => println!("! provider      offline planner only; run `utharness providers env`"),
+    }
+    let report = setup_system::scan_environment();
+    let missing = report
+        .components
+        .iter()
+        .filter(|component| {
+            component.required && component.state != setup_system::ComponentState::Available
+        })
+        .count();
+    if missing == 0 {
+        println!("✓ dependencies  required components available");
+    } else {
+        println!("! dependencies  {missing} required component(s) need attention");
+        if args.fix {
+            for component in report.components.iter().filter(|component| {
+                component.required && component.state != setup_system::ComponentState::Available
+            }) {
+                if let Some(hint) = &component.install_hint {
+                    println!("  run: {hint}");
+                }
+            }
+        }
     }
     println!("✓ skills        built-in registry available");
     if termux::is_termux() {
@@ -961,22 +1043,93 @@ fn doctor() -> Result<()> {
 }
 
 fn setup(args: SetupArgs) -> Result<()> {
+    if args.scan {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&setup_system::scan_environment())?
+        );
+        return Ok(());
+    }
     if !args.non_interactive && io::stdin().is_terminal() && io::stdout().is_terminal() {
         return launch_ui(&["--setup"]);
     }
 
     let app = App::open(".")?;
-    let mode = match args.mode.trim().to_ascii_lowercase().as_str() {
-        "quick" | "full" | "blank" => args.mode.trim().to_ascii_lowercase(),
-        other => anyhow::bail!("unsupported setup mode '{other}'; use quick, full, or blank"),
+    let requested_mode = if args.quick {
+        "quick"
+    } else if args.full {
+        "full"
+    } else if args.developer {
+        "developer"
+    } else if args.local_ai {
+        "local"
+    } else if args.custom {
+        "custom"
+    } else if args.blank {
+        "blank"
+    } else {
+        args.mode.trim()
     };
-    let provider = args.provider.unwrap_or_else(|| {
-        if mode == "blank" {
-            "offline".into()
-        } else {
-            "openrouter".into()
+    let mode = match requested_mode.to_ascii_lowercase().replace('-', "_").as_str() {
+        "quick" | "full" | "developer" | "local" | "local_ai" | "custom" | "blank" | "import" => requested_mode.to_ascii_lowercase().replace('-', "_"),
+        other => anyhow::bail!("unsupported setup mode '{other}'; use quick, full, developer, local-ai, custom, blank, or import"),
+    };
+    if mode == "import" {
+        let source = args
+            .import_config
+            .context("--import-config is required for import mode")?;
+        let raw = fs::read_to_string(&source)
+            .with_context(|| format!("failed to read {}", source.display()))?;
+        let imported: RuntimeConfig =
+            serde_json::from_str(&raw).context("imported configuration is invalid")?;
+        if imported.schema_version != 1 {
+            anyhow::bail!("unsupported imported configuration schema");
         }
+        let destination = env::current_dir()?.join("utharness.json");
+        fs::write(
+            &destination,
+            format!("{}\n", serde_json::to_string_pretty(&imported)?),
+        )?;
+        setup_system::write_global_config(
+            &imported.mode,
+            &imported.provider,
+            &imported.model,
+            &destination,
+        )?;
+        println!(
+            "UTHARNESS SETUP\n✓ imported {} into {}",
+            source.display(),
+            destination.display()
+        );
+        return Ok(());
+    }
+    let provider = args.provider.unwrap_or_else(|| {
+        match mode.as_str() {
+            "blank" => "offline",
+            "local" | "local_ai" => "ollama",
+            "custom" => "custom",
+            _ => "openrouter",
+        }
+        .into()
     });
+    if let Some(url) = args.provider_url.as_deref() {
+        env::set_var("UTHARNESS_PROVIDER_URL", url);
+    }
+    if let Some(model) = args.model.as_deref() {
+        env::set_var("UTHARNESS_MODEL", model);
+    }
+    if args.api_key_stdin {
+        use std::io::Read;
+        let mut secret = String::new();
+        io::stdin()
+            .read_to_string(&mut secret)
+            .context("failed to read API key from stdin")?;
+        let variable =
+            provider_key_variable(&provider).context("this provider does not accept an API key")?;
+        let secret = secret.trim_end_matches(['\r', '\n']);
+        setup_system::persist_secret(variable, secret)?;
+        env::set_var(variable, secret);
+    }
     let status = if provider == "offline" {
         None
     } else {
@@ -995,6 +1148,7 @@ fn setup(args: SetupArgs) -> Result<()> {
     } else if args.tools.is_empty() {
         match mode.as_str() {
             "blank" => vec!["workspace_read".into()],
+            "developer" => SETUP_TOOLS.iter().map(|tool| (*tool).to_string()).collect(),
             _ => vec![
                 "workspace_read".into(),
                 "git_inspection".into(),
@@ -1033,6 +1187,12 @@ fn setup(args: SetupArgs) -> Result<()> {
         format!("{}\n", serde_json::to_string_pretty(&config)?),
     )
     .with_context(|| format!("failed to write {}", config_path.display()))?;
+    let global_config = setup_system::write_global_config(
+        &config.mode,
+        &config.provider,
+        &config.model,
+        &config_path,
+    )?;
     println!("UTHARNESS SETUP");
     println!("workspace: {}", app.workspace.canonical_path);
     if termux::is_termux() {
@@ -1047,16 +1207,23 @@ fn setup(args: SetupArgs) -> Result<()> {
         println!("✓ workspace database initialized");
     }
     println!("config:    {}", config_path.display());
+    println!("global:    {}", global_config.display());
     println!("provider:  {}", config.provider);
     println!("model:     {}", config.model);
     println!("tools:     {}", config.tools.join(", "));
-    println!("\nAPI keys are read from the environment and never stored in utharness.json.");
+    println!("\nAPI keys are never stored in utharness.json or logs; setup secrets use a private secrets.env file.");
     if let Some(status) = status {
         if status.configured {
             if let Some(source) = status.credential_source.as_deref() {
                 println!("✓ credentials found in {source}");
             } else {
                 println!("✓ no API key required for this provider");
+            }
+            if !args.skip_validation {
+                let gateway =
+                    Gateway::new_from_environment(ProviderKind::parse(&config.provider)?)?;
+                gateway.validate_model()?;
+                println!("✓ provider and model validated");
             }
         } else {
             println!(
@@ -1065,8 +1232,22 @@ fn setup(args: SetupArgs) -> Result<()> {
             );
         }
     }
-    println!("next: utharness providers test && utharness doctor");
+    println!("next: utharness providers test && utharness doctor && utharness");
     Ok(())
+}
+
+fn provider_key_variable(provider: &str) -> Option<&'static str> {
+    match provider {
+        "openrouter" => Some("OPENROUTER_API_KEY"),
+        "openai" => Some("OPENAI_API_KEY"),
+        "groq" => Some("GROQ_API_KEY"),
+        "together" => Some("TOGETHER_API_KEY"),
+        "deepseek" => Some("DEEPSEEK_API_KEY"),
+        "fireworks" => Some("FIREWORKS_API_KEY"),
+        "nvidia" => Some("NVIDIA_API_KEY"),
+        "custom" => Some("UTHARNESS_API_KEY"),
+        _ => None,
+    }
 }
 
 fn providers(action: ProviderAction) -> Result<()> {
@@ -1142,18 +1323,42 @@ fn agents(action: AgentAction) -> Result<()> {
     }
 }
 
-fn models() -> Result<()> {
-    println!("MODELS");
-    for provider in supported_providers()
-        .into_iter()
-        .filter(|provider| provider.configured)
-    {
-        println!("{}/{}", provider.provider, provider.model);
+fn models(action: ModelAction) -> Result<()> {
+    match action {
+        ModelAction::List => {
+            println!("MODELS");
+            if let Ok(gateway) = Gateway::from_environment() {
+                let models = gateway.models()?;
+                for model in models {
+                    println!("{}", model);
+                }
+                println!("active: {}/{}", gateway.provider(), gateway.model());
+            } else {
+                for provider in supported_providers()
+                    .into_iter()
+                    .filter(|provider| provider.configured)
+                {
+                    println!("{}/{}", provider.provider, provider.model);
+                }
+                println!("offline/deterministic-planner");
+            }
+            Ok(())
+        }
+        ModelAction::Test { provider } => {
+            let gateway = if provider == "auto" {
+                Gateway::from_environment()?
+            } else {
+                Gateway::new_from_environment(ProviderKind::parse(&provider)?)?
+            };
+            gateway.validate_model()?;
+            println!(
+                "✓ provider={} model={} available",
+                gateway.provider(),
+                gateway.model()
+            );
+            Ok(())
+        }
     }
-    if let Ok(model) = env::var("UTHARNESS_MODEL") {
-        println!("active: {model}");
-    }
-    Ok(())
 }
 
 fn mcp() -> Result<()> {

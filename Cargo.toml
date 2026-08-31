@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.12"
+version = "0.2.13"
 edition = "2021"
 license = "MIT"
 authors = ["Utharness Contributors"]
@@ -31,3 +31,4 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 uuid = { version = "1.10", features = ["v4", "v7", "serde"] }
 tempfile = "3.14"
+wait-timeout = "0.2"

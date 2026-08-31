@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/uthumany/utharnessly/main/packaging
 
 ## Termux installation
 
-A native Termux package is built under [`packages/utharness`](./packages/utharness) and is published through the signed UTHARNESS APT repository. The current release line provides v0.2.12 packages and does not require root:
+A native Termux package is built under [`packages/utharness`](./packages/utharness) and is published through the signed UTHARNESS APT repository. The current release line provides v0.2.13 packages and does not require root:
 
 ```bash
 pkg update
@@ -54,12 +54,13 @@ utharness setup
 utharness
 ```
 
-`utharness setup` opens a responsive keyboard-driven wizard in an interactive terminal. It offers Quick, Full, and Blank Slate modes; selects from the provider gateways implemented by the runtime; detects provider credentials from environment variables; and writes the provider, model, permission mode, and enabled capabilities to the workspace’s `utharness.json`. API keys are never written to that file. For automation and CI, the same validated path is available without a TUI:
+`utharness setup` opens a responsive keyboard-driven wizard after a real environment and dependency scan. It offers Quick, Full, Developer, Local AI, Custom Provider, Blank Slate, and Import modes; accepts masked API-key input over stdin; discovers and validates provider models; and writes non-secret project settings to `utharness.json`. Setup-managed secrets are stored separately in `~/.utharness/secrets.env` with private permissions and are never printed or written to project configuration. See [`docs/setup.md`](./docs/setup.md) for the complete flow. For automation and CI, the same canonical Rust path is available without a TUI:
 
 ```bash
 utharness setup --non-interactive --mode full --provider ollama \
   --model qwen2.5-coder:7b \
-  --tools workspace_read,git_inspection,skills,memory
+  --tools workspace_read,git_inspection,skills,memory \
+  --skip-validation
 ```
 
 The package installs only under `$PREFIX/bin/utharness`, `$PREFIX/lib/utharness`, and `$PREFIX/share/utharness`. User data remains under `~/.config/utharness`, `~/.local/share/utharness`, and `~/.cache/utharness`. Package-managed updates must use:
@@ -124,9 +125,13 @@ The following captures were generated from real isolated CLI and PTY runs. They 
 
 ### Interactive setup wizard
 
-| Welcome | Provider selector | Capability selector |
+| Environment and mode | Authentication | Masked credential |
 |---|---|---|
-| ![Utharness setup welcome](docs/assets/screenshots/setup-welcome.png) | ![Utharness provider selector](docs/assets/screenshots/setup-provider.png) | ![Utharness capability selector](docs/assets/screenshots/setup-tools.png) |
+| ![Utharness environment scan and setup modes](docs/assets/screenshots/setup-menu-v2.png) | ![Utharness authentication selector](docs/assets/screenshots/setup-auth-v2.png) | ![Utharness masked API key entry](docs/assets/screenshots/setup-secret-v2.png) |
+
+| Runtime capabilities | Validation review |
+|---|---|
+| ![Utharness capability selector](docs/assets/screenshots/setup-tools-v2.png) | ![Utharness setup review](docs/assets/screenshots/setup-review-v2.png) |
 
 The interactive capture matrix covers `20`, `30`, `40`, `60`, `80`, `100`, `120`, `160`, and `200` columns, including short-height layouts. The UI keeps its banner, prompt, and status bar fixed while the conversation viewport changes with terminal size.
 
@@ -136,7 +141,7 @@ The interactive capture matrix covers `20`, `30`, `40`, `60`, `80`, `100`, `120`
 | --- | --- |
 | Native CLI | Clap commands for `init`, `chat`, `run`, `tui`, `autonomous`, `doctor`, `config`, `sessions`, `memory`, `checkpoint`, `skills`, `providers`, `agents`, and `tools`. |
 | SQLite persistence | Bundled SQLite with foreign keys, WAL mode, migrations, sessions, messages, tasks, checkpoints, events, memories, FTS5 search, tool calls, permission decisions, and audit records. |
-| AI gateway | Real-time SSE token streaming and health checks for OpenRouter, OpenAI, Groq, Together, DeepSeek, Fireworks, Ollama, and custom OpenAI-compatible endpoints. Keys are environment-only. |
+| AI gateway | Real-time SSE token streaming and health checks for OpenRouter, OpenAI, Groq, Together, DeepSeek, Fireworks, NVIDIA NIM, Ollama, and custom OpenAI-compatible endpoints. Keys come from the environment or the setup-managed private secrets file and never enter project configuration. |
 | Offline operation | Deterministic offline planner responses persist user and assistant messages without credentials. |
 | Bounded autonomy | Provider-neutral JSON planning with a strict SAFE read-only allowlist, step limits, workspace scoping, redaction, and persisted events. |
 | Safety | SAFE default, explicit approval for shell execution, destructive-command denial, workspace path validation, and secret redaction. |

@@ -1,7 +1,7 @@
 use std::{
     io::{Read, Write},
     net::TcpListener,
-    process::Command,
+    process::{Command, Stdio},
 };
 use tempfile::tempdir;
 
@@ -298,6 +298,7 @@ fn setup_writes_valid_runtime_configuration_without_secrets() {
             "ollama",
             "--model",
             "qwen2.5-coder:7b",
+            "--skip-validation",
             "--tools",
             "workspace_read,git_inspection,terminal",
         ],
@@ -311,6 +312,9 @@ fn setup_writes_valid_runtime_configuration_without_secrets() {
     assert_eq!(config["model"], "qwen2.5-coder:7b");
     assert!(raw.contains("workspace_read"));
     assert!(!raw.to_ascii_lowercase().contains("api_key"));
+    let global = std::fs::read_to_string(home.path().join(".utharness/config.yaml")).unwrap();
+    assert!(global.contains("provider: \"ollama\""));
+    assert!(global.contains("secrets_file:"));
 
     let shown = run(bin, workspace.path(), home.path(), &["config"]);
     assert!(shown.contains("provider = \"ollama\""));
@@ -334,6 +338,84 @@ fn setup_writes_valid_runtime_configuration_without_secrets() {
     let updated = std::fs::read_to_string(workspace.path().join("utharness.json")).unwrap();
     assert!(updated.contains("\"icons\": \"ascii\""));
     assert!(updated.contains("\"banner\": false"));
+}
+
+#[test]
+fn setup_scans_and_persists_validated_secrets_outside_configuration() {
+    let workspace = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    let bin = env!("CARGO_BIN_EXE_utharness");
+    let scan = run(bin, workspace.path(), home.path(), &["setup", "--scan"]);
+    let report: serde_json::Value = serde_json::from_str(&scan).unwrap();
+    assert_eq!(report["os"], std::env::consts::OS);
+    assert!(report["components"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| item["id"] == "git"));
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = std::thread::spawn(move || {
+        let (mut socket, _) = listener.accept().unwrap();
+        let mut request = [0_u8; 4096];
+        let read = socket.read(&mut request).unwrap();
+        let request = String::from_utf8_lossy(&request[..read]);
+        assert!(request.contains("GET /v1/models"));
+        assert!(request
+            .to_ascii_lowercase()
+            .contains("authorization: bearer setup-secret"));
+        let body = r#"{"data":[{"id":"verified-model"}]}"#;
+        write!(socket, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body).unwrap();
+    });
+    let mut child = Command::new(bin)
+        .current_dir(workspace.path())
+        .env("HOME", home.path())
+        .env("UTHARNESS_HOME", home.path().join(".utharness"))
+        .env("UTHARNESS_PROVIDER_URL", format!("http://{address}/v1"))
+        .args([
+            "setup",
+            "--non-interactive",
+            "--provider",
+            "custom",
+            "--model",
+            "verified-model",
+            "--api-key-stdin",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"setup-secret")
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    server.join().unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(!stdout.contains("setup-secret"));
+    let config = std::fs::read_to_string(workspace.path().join("utharness.json")).unwrap();
+    assert!(!config.contains("setup-secret"));
+    let secrets = home.path().join(".utharness/secrets.env");
+    assert!(std::fs::read_to_string(&secrets)
+        .unwrap()
+        .contains("setup-secret"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(secrets).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
 }
 
 #[test]

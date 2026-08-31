@@ -4,6 +4,31 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.13] — 2026-08-31
+
+### Added
+
+- Canonical interactive and non-interactive setup flows for Quick, Full, Developer, Local AI, Custom Provider, Blank Slate, and validated configuration import modes.
+- Real prerequisite scanning, live provider model discovery, model validation, masked stdin credential entry, managed private secrets, and repair-capable diagnostics.
+- Responsive setup screens for provider, authentication, models, runtime capabilities, review, validation, completion, and actionable recovery.
+
+### Security
+
+- Setup-managed API keys are written atomically to `~/.utharness/secrets.env` with owner-only permissions on Unix and never appear in command arguments, project configuration, logs, or screenshots.
+- Secret variable names, custom provider URLs, imported configuration, and provider/model selections are validated before activation; insecure remote HTTP endpoints remain rejected.
+- PowerShell installation now fails closed when release checksums cannot be verified.
+
+### Fixed
+
+- Native UI binary discovery now resolves source builds consistently from the UI and workspace directories.
+- Shell and PowerShell installers verify the Node.js runtime, archive layout, installed binary, UI bundle, and reported version before declaring success.
+- Package-validation CI derives expected versions from manifests instead of stale hard-coded release numbers.
+
+### Verification
+
+- Added process-level tests for environment scanning, stdin-only API keys, authorization headers, live model discovery, validation failure behavior, secret leakage prevention, and private file permissions.
+- Added real PTY captures of the environment/mode, authentication, masked-secret, capability, and review screens.
+
 ## [0.2.12] — 2026-08-31
 
 ### Added

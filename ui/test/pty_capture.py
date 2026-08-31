@@ -18,7 +18,7 @@ def size(fd, cols, rows):
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
 
 
-def capture(cols, rows, label, keys=b"", arguments=None):
+def capture(cols, rows, label, keys=b"", arguments=None, settle=2.2, wait_for=None):
     pid, fd = pty.fork()
     if pid == 0:
         env = os.environ.copy()
@@ -43,7 +43,12 @@ def capture(cols, rows, label, keys=b"", arguments=None):
 
     # Keep draining while the asynchronous runtime and git snapshot settle. This
     # avoids capturing a transient cleared frame on slower CI and Termux hosts.
-    drain(2.2)
+    if wait_for:
+        deadline = time.time() + settle
+        while wait_for not in data and time.time() < deadline:
+            drain(0.25)
+    else:
+        drain(settle)
     if keys:
         sequence = keys if isinstance(keys, list) else [keys]
         for chunk in sequence:
@@ -76,11 +81,18 @@ def capture(cols, rows, label, keys=b"", arguments=None):
         handle.write(data)
 
 
-for cols, rows in [(20, 12), (30, 15), (40, 18), (60, 24), (80, 28), (100, 32), (120, 40), (160, 50), (200, 55)]:
-    capture(cols, rows, "focus")
-capture(120, 40, "palette", b"\x0b")
-capture(160, 50, "workspace", b"\x02")
-capture(100, 30, "setup-welcome", arguments=["--setup"])
-capture(100, 30, "setup-provider", [b"\r", b"\x1b[B", b"\r"], ["--setup"])
-capture(100, 30, "setup-tools", [b"\r", b"\x1b[B", b"\r", b"\r"], ["--setup"])
+mode = os.environ.get("UTHARNESS_CAPTURE", "all")
+if mode in ("all", "main"):
+    for cols, rows in [(20, 12), (30, 15), (40, 18), (60, 24), (80, 28), (100, 32), (120, 40), (160, 50), (200, 55)]:
+        capture(cols, rows, "focus")
+    capture(120, 40, "palette", b"\x0b")
+    capture(160, 50, "workspace", b"\x02")
+if mode in ("all", "setup"):
+    ready = b"environment scan complete"
+    capture(100, 30, "setup-menu", arguments=["--setup"], settle=20.0, wait_for=ready)
+    capture(100, 30, "setup-provider", [b"\r"], ["--setup"], settle=20.0, wait_for=ready)
+    capture(100, 30, "setup-auth", [b"\r", b"\r"], ["--setup"], settle=20.0, wait_for=ready)
+    capture(100, 30, "setup-secret", [b"\r", b"\r", b"\r", b"nvapi-example-secret"], ["--setup"], settle=20.0, wait_for=ready)
+    capture(100, 30, "setup-tools", [b"\x1b[B", b"\x1b[B", b"\r", b"\r", b"\x1b[B", b"\x1b[B", b"\x1b[B", b"\r"], ["--setup"], settle=20.0, wait_for=ready)
+    capture(100, 30, "setup-review", [b"\x1b[B", b"\x1b[B", b"\x1b[B", b"\x1b[B", b"\x1b[B", b"\r"], ["--setup"], settle=20.0, wait_for=ready)
 print("captured")

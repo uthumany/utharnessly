@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
+import { runtimeBinary } from './runtime-binary.js';
 import type { Message, RuntimeSnapshot, ToolCard } from './types.js';
 
 const runtimeSchema = z.object({
@@ -48,10 +49,6 @@ const initialMessages = (): Message[] => [
 async function commandOutput(command: string, args: string[], cwd: string): Promise<string> {
   const result = await execa(command, args, { cwd, reject: false, timeout: 2_500 });
   return result.stdout.trim();
-}
-
-function runtimeBinary(): string {
-  return process.env.UTHARNESS_RUNTIME_BIN ?? path.resolve(process.cwd(), '../target/release/utharness');
 }
 
 export async function loadSnapshot(cwd = process.cwd()): Promise<RuntimeSnapshot> {

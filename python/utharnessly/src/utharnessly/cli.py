@@ -14,7 +14,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-VERSION = "0.2.12"
+VERSION = "0.2.13"
 REPOSITORY = "uthumany/utharnessly"
 
 

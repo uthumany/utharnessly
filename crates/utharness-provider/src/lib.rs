@@ -136,6 +136,15 @@ struct ApiError {
     message: String,
 }
 #[derive(Debug, Deserialize)]
+struct ModelsResponse {
+    #[serde(default)]
+    data: Vec<ModelRecord>,
+}
+#[derive(Debug, Deserialize)]
+struct ModelRecord {
+    id: String,
+}
+#[derive(Debug, Deserialize)]
 struct StreamPayload {
     #[serde(default)]
     choices: Vec<StreamChoice>,
@@ -252,6 +261,38 @@ impl Gateway {
             anyhow::bail!("{} health check failed with HTTP {status}", self.kind.id());
         }
         Ok(status)
+    }
+    pub fn models(&self) -> Result<Vec<String>> {
+        let response = self
+            .authorize(self.client.get(format!("{}/models", self.base_url)))
+            .send()
+            .context("provider model-list request failed")?;
+        let status = response.status();
+        if !status.is_success() {
+            anyhow::bail!("{} model list failed with HTTP {status}", self.kind.id());
+        }
+        let payload: ModelsResponse = response
+            .json()
+            .context("provider returned an invalid model list")?;
+        let mut models = payload
+            .data
+            .into_iter()
+            .map(|model| model.id)
+            .collect::<Vec<_>>();
+        models.sort();
+        models.dedup();
+        Ok(models)
+    }
+    pub fn validate_model(&self) -> Result<()> {
+        let models = self.models()?;
+        if models.is_empty() || models.iter().any(|model| model == &self.model) {
+            return Ok(());
+        }
+        anyhow::bail!(
+            "model '{}' is not exposed by {}; choose one returned by `utharness models list`",
+            self.model,
+            self.kind.id()
+        )
     }
     pub fn complete(&self, messages: &[ChatMessage], temperature: f32) -> Result<String> {
         let body = serde_json::json!({"model": self.model, "messages": messages, "temperature": temperature, "max_tokens": 1200});

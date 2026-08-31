@@ -9,15 +9,23 @@ import { bannerHeight, bannerTier, detectTerminalCapabilities, letterColors, res
 import { getColorMode } from '../src/tui/theme.js';
 import { loadUiState, normalizeUiState, saveUiState } from '../src/tui/state.js';
 import { loadSnapshot, parseGitSnapshot } from '../src/runtime.js';
-import { modes, providers, recommendedTools, tools } from '../src/setup-data.js';
+import { runtimeBinary } from '../src/runtime-binary.js';
+import { authMethods, modes, progress, providers, recommendedTools, tools } from '../src/setup-data.js';
 
 test('setup exposes only runtime-backed providers and capabilities', () => {
-  assert.deepEqual(modes.map(item => item.id), ['quick', 'full', 'blank']);
+  assert.deepEqual(modes.map(item => item.id), ['quick', 'full', 'developer', 'local_ai', 'custom', 'blank', 'import', 'exit']);
   assert.ok(providers.some(item => item.id === 'ollama' && item.key === undefined));
   assert.ok(providers.some(item => item.id === 'nvidia' && item.key === 'NVIDIA_API_KEY'));
   assert.ok(providers.every(item => item.id !== 'anthropic'));
   assert.ok(tools.every(item => item.risk === 'safe' || item.risk === 'ask'));
   assert.ok(recommendedTools.every(id => tools.some(item => item.id === id)));
+  assert.deepEqual(authMethods.map(item => item.id), ['api_key', 'oauth', 'environment', 'skip']);
+  assert.equal(progress(3, 4), 75); assert.equal(progress(0, 0), 100);
+});
+
+test('resolves native runtime paths for package and source layouts', () => {
+  assert.equal(runtimeBinary('/workspace', { UTHARNESS_RUNTIME_BIN: '/opt/utharness' }), '/opt/utharness');
+  assert.ok(runtimeBinary(process.cwd(), {}).endsWith(path.join('target', 'release', process.platform === 'win32' ? 'utharness.exe' : 'utharness')));
 });
 
 test('maps required terminal width breakpoints', () => {

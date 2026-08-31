@@ -26,6 +26,15 @@ esac
 
 command -v curl >/dev/null || { echo "curl is required" >&2; exit 1; }
 command -v tar >/dev/null || { echo "tar is required" >&2; exit 1; }
+command -v node >/dev/null || {
+  cat >&2 <<'EOF'
+Node.js 18 or newer is required for the full-screen terminal UI.
+Install the current Node.js LTS release with your platform package manager, then rerun this installer.
+EOF
+  exit 1
+}
+node_major="$(node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || echo 0)"
+[[ "$node_major" -ge 18 ]] || { echo "Node.js 18 or newer is required; found $(node --version 2>/dev/null || echo unknown)" >&2; exit 1; }
 if command -v sha256sum >/dev/null; then
   checksum() { sha256sum "$1" | awk '{print $1}'; }
 elif command -v shasum >/dev/null; then
@@ -88,14 +97,19 @@ mkdir -p "$INSTALL_DIR"
 tar -xzf "$archive" -C "$tmpdir"
 package_dir="$(find "$tmpdir" -mindepth 1 -maxdepth 1 -type d -name 'utharnessly-*' -print -quit)"
 [[ -n "$package_dir" ]] || { echo "release archive has no utharnessly directory" >&2; exit 1; }
+[[ -x "${package_dir}/utharness" ]] || { echo "release archive has no executable utharness binary" >&2; exit 1; }
+[[ -s "${package_dir}/ui/dist/index.js" ]] || { echo "release archive has no built terminal UI bundle" >&2; exit 1; }
 rm -rf "${INSTALL_DIR}/utharnessly-ui"
 install -m 0755 "${package_dir}/utharness" "${INSTALL_DIR}/utharness"
 ln -sfn utharness "${INSTALL_DIR}/utharnessly"
 mkdir -p "${INSTALL_DIR}/utharnessly-ui"
 cp -R "${package_dir}/ui/." "${INSTALL_DIR}/utharnessly-ui/"
+installed_version="$(${INSTALL_DIR}/utharness --version)"
+[[ "$installed_version" == utharness\ * ]] || { echo "installed binary failed its version health check" >&2; exit 1; }
 
 cat <<EOF
 Installed utharnessly to ${INSTALL_DIR}/utharness.
 The UI bundle is in ${INSTALL_DIR}/utharnessly-ui.
+Verified ${installed_version} with Node $(node --version).
 Ensure ${INSTALL_DIR} is on PATH, then run: utharnessly
 EOF

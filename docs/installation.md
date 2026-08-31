@@ -62,7 +62,7 @@ pkg install termux-api git openssh python
 
 ## Quick start
 
-After installation, run `utharness setup` in a terminal. The interactive wizard uses arrow keys and Enter for a quick or blank configuration; Full Setup also uses Space to toggle capabilities. It writes `utharness.json` in the current workspace. Provider API keys remain environment-only and are reported as detected or missing without being displayed.
+After installation, run `utharness setup` in a terminal. The wizard scans the environment, provides Quick, Full, Developer, Local AI, Custom Provider, Blank Slate, and Import modes, and uses Space to toggle capabilities where applicable. It writes non-secret workspace settings to `utharness.json`; masked setup credentials are stored separately in `~/.utharness/secrets.env` with private permissions and are automatically loaded by the runtime.
 
 The scriptable equivalent is:
 
@@ -189,7 +189,7 @@ To uninstall the npm launcher, run `npm uninstall --global utharnessly` and remo
 | Windows Terminal, WezTerm, Alacritty, Tabby, Cmder | **Supported rendering class** | Pair with the Windows x64 release or source workflow; Windows-hosted CI validates the CLI build, not every emulator. |
 | Kitty, WezTerm, Alacritty, Ghostty, Tilix on Linux | **Supported rendering class** | Linux PTY screenshots and terminal smoke tests were run on Linux; emulator-specific glyph differences remain possible. |
 | Ghostty, iTerm2, Warp, WezTerm, Kitty on macOS | **Supported rendering class** | Use the macOS x64 or arm64 release or source workflow; hosted CI validates macOS builds. |
-| Termux | **Supported package path; device validation pending** | Use the signed v0.2.12 repository. Real terminal behavior, Android-version compatibility, and Termux:API execution still require device testing. |
+| Termux | **Supported package path; device validation pending** | Use the signed v0.2.13 repository. Real terminal behavior, Android-version compatibility, and Termux:API execution still require device testing. |
 | Termius, ConnectBot, TermAI, Moshi | **Remote-client workflow** | These are SSH/client environments, not independently tested native build targets. |
 | Blink Shell, Secure ShellFish | **Remote-client workflow** | Connect to a supported Linux/macOS host. |
 | a-Shell, iSH | **Unsupported local native target** | Use SSH or a remote/container host. |
