@@ -316,10 +316,14 @@ pub fn write_global_config(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
     use tempfile::tempdir;
+
+    static ENVIRONMENT_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn secret_file_is_private_and_round_trips_quotes() {
+        let _guard = ENVIRONMENT_LOCK.lock().unwrap();
         let directory = tempdir().unwrap();
         env::set_var("UTHARNESS_HOME", directory.path());
         persist_secret("OPENAI_API_KEY", "secret'with quote").unwrap();
@@ -344,6 +348,7 @@ mod tests {
 
     #[test]
     fn rejects_invalid_secret_variable_names() {
+        let _guard = ENVIRONMENT_LOCK.lock().unwrap();
         let directory = tempdir().unwrap();
         env::set_var("UTHARNESS_HOME", directory.path());
         assert!(persist_secret("", "secret").is_err());

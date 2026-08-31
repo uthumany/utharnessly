@@ -4,6 +4,12 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.14] — 2026-08-31
+
+### Fixed
+
+- Serialized environment-mutating secret-store tests so the cross-platform CI matrix cannot race on process-global environment variables.
+
 ## [0.2.13] — 2026-08-31
 
 ### Added
