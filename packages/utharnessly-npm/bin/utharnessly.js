@@ -10,7 +10,7 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
-const VERSION = '0.2.14';
+const VERSION = '0.2.15';
 const REPOSITORY = 'uthumany/utharnessly';
 const BASE_URL = (process.env.UTHARNESSLY_RELEASE_BASE_URL || `https://github.com/${REPOSITORY}/releases/download/v${VERSION}`).replace(/\/$/, '');
 

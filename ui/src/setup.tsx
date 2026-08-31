@@ -5,7 +5,16 @@ import { authMethods, developerTools, modes, progress, providers, recommendedToo
 import { runtimeBinary } from './runtime-binary.js';
 
 type Stage = 'scan' | 'mode' | 'provider' | 'custom_url' | 'auth' | 'secret' | 'model' | 'tools' | 'import' | 'review' | 'saving' | 'done' | 'error';
+type ModelCatalog = { provider: string; models: string[]; active: string };
 const cyan = '#25d9cb', purple = '#db79ff', green = '#69d26f', yellow = '#ffbe55', red = '#ff6b6b', muted = '#8b93a7';
+
+export function parseModelCatalog(raw: string): ModelCatalog {
+  const value = JSON.parse(raw) as Partial<ModelCatalog>;
+  if (!Array.isArray(value.models) || !value.models.every(model => typeof model === 'string') || typeof value.active !== 'string' || typeof value.provider !== 'string') {
+    throw new Error('The runtime returned an invalid model catalog.');
+  }
+  return { provider: value.provider, models: [...new Set(value.models)].sort(), active: value.active };
+}
 
 function List({ items, selected, marked }: { items: Array<{ id: string; label: string; description: string }>; selected: number; marked?: Set<string> }) {
   return <Box flexDirection="column">{items.map((item, index) => <Text key={item.id} color={index === selected ? cyan : undefined} wrap="truncate-end">{index === selected ? '› ' : '  '}{marked ? `[${marked.has(item.id) ? '●' : ' '}]` : `${index + 1}.`} <Text bold={index === selected}>{item.label}</Text> <Text color={muted}>— {item.description}</Text></Text>)}</Box>;
@@ -26,7 +35,7 @@ export function SetupApp() {
   const [error, setError] = useState(''); const columns = Math.max(30, stdout.columns ?? 80), compact = columns < 70;
   const providerInfo = providers.find(item => item.id === provider) ?? providers[0]!;
   const selectedTools = useMemo(() => tools.filter(tool => enabled.has(tool.id)), [enabled]);
-  const list = stage === 'mode' ? modes : stage === 'provider' ? providers : stage === 'auth' ? authMethods : stage === 'tools' ? tools : stage === 'model' ? modelOptions.map(id => ({ id, label: id, description: id === model ? 'recommended default' : 'available model' })) : [];
+  const list = stage === 'mode' ? modes : stage === 'provider' ? providers : stage === 'auth' ? authMethods : stage === 'tools' ? tools : stage === 'model' ? modelOptions.map(id => ({ id, label: id, description: id === model ? 'active selection' : 'available from provider' })) : [];
 
   useEffect(() => { void execa(runtimeBinary(), ['setup', '--scan'], { cwd: process.cwd(), reject: false }).then(result => {
     if (result.exitCode !== 0) { setError(result.stderr || 'Environment scan failed'); setStage('error'); return; }
@@ -37,10 +46,15 @@ export function SetupApp() {
     if (method === 'oauth') { setError(`${info.label} OAuth is not exposed by this provider adapter. Choose API Key or Environment Variable.`); setStage('error'); return; }
     if (method === 'skip') { setModelOptions([info.model]); setModel(info.model); setStage(mode === 'full' || mode === 'developer' ? 'tools' : 'review'); return; }
     const env = { ...process.env, UTHARNESS_PROVIDER: selectedProvider, UTHARNESS_MODEL: info.model, ...(secret && info.key ? { [info.key]: secret } : {}), ...(selectedProvider === 'custom' ? { UTHARNESS_PROVIDER_URL: customUrl } : {}) };
-    const result = await execa(runtimeBinary(), ['models', 'list'], { cwd: process.cwd(), env, reject: false });
+    const result = await execa(runtimeBinary(), ['models', 'list', '--json'], { cwd: process.cwd(), env, reject: false });
     if (result.exitCode !== 0) { setError(result.stderr || result.stdout || 'Credential or model validation failed'); setStage('error'); return; }
-    const found = result.stdout.split(/\r?\n/).filter(line => line && line !== 'MODELS' && !line.startsWith('active:'));
-    const choices = found.length ? found : [info.model]; setModelOptions(choices); setModel(choices.includes(info.model) ? info.model : choices[0]!); setSelected(0); setStage('model');
+    try {
+      const catalog = parseModelCatalog(result.stdout);
+      const choices = catalog.models.length ? catalog.models : [info.model];
+      const active = catalog.active.replace(`${catalog.provider}/`, '');
+      const chosen = choices.includes(active) ? active : choices.includes(info.model) ? info.model : choices[0]!;
+      setModelOptions(choices); setModel(chosen); setSelected(Math.max(0, choices.indexOf(chosen))); setStage('model');
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Model catalog parsing failed'); setStage('error'); }
   };
 
   const save = async () => {

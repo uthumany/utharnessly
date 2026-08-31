@@ -11,16 +11,26 @@ import { loadUiState, normalizeUiState, saveUiState } from '../src/tui/state.js'
 import { loadSnapshot, parseGitSnapshot } from '../src/runtime.js';
 import { runtimeBinary } from '../src/runtime-binary.js';
 import { authMethods, modes, progress, providers, recommendedTools, tools } from '../src/setup-data.js';
+import { parseModelCatalog } from '../src/setup.js';
 
 test('setup exposes only runtime-backed providers and capabilities', () => {
   assert.deepEqual(modes.map(item => item.id), ['quick', 'full', 'developer', 'local_ai', 'custom', 'blank', 'import', 'exit']);
   assert.ok(providers.some(item => item.id === 'ollama' && item.key === undefined));
   assert.ok(providers.some(item => item.id === 'nvidia' && item.key === 'NVIDIA_API_KEY'));
+  assert.equal(providers.find(item => item.id === 'groq')?.model, 'groq/compound-mini');
   assert.ok(providers.every(item => item.id !== 'anthropic'));
   assert.ok(tools.every(item => item.risk === 'safe' || item.risk === 'ask'));
   assert.ok(recommendedTools.every(id => tools.some(item => item.id === id)));
   assert.deepEqual(authMethods.map(item => item.id), ['api_key', 'oauth', 'environment', 'skip']);
   assert.equal(progress(3, 4), 75); assert.equal(progress(0, 0), 100);
+});
+
+test('uses the structured live model catalog and preserves its active selection', () => {
+  assert.deepEqual(
+    parseModelCatalog('{"provider":"groq","models":["qwen/qwen3.8-27b","groq/compound-mini","groq/compound-mini"],"active":"groq/groq/compound-mini"}'),
+    { provider: 'groq', models: ['groq/compound-mini', 'qwen/qwen3.8-27b'], active: 'groq/groq/compound-mini' }
+  );
+  assert.throws(() => parseModelCatalog('{"models":[42]}'));
 });
 
 test('resolves native runtime paths for package and source layouts', () => {

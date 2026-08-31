@@ -19,7 +19,7 @@ export const modes: Array<{ id: SetupMode; label: string; description: string }>
 export const providers: ProviderOption[] = [
   { id: 'openrouter', label: 'OpenRouter', description: 'OpenAI-compatible model aggregator', model: 'openrouter/free', key: 'OPENROUTER_API_KEY' },
   { id: 'openai', label: 'OpenAI', description: 'direct OpenAI API', model: 'gpt-4o-mini', key: 'OPENAI_API_KEY' },
-  { id: 'groq', label: 'Groq', description: 'low-latency hosted inference', model: 'llama-3.3-70b-versatile', key: 'GROQ_API_KEY' },
+  { id: 'groq', label: 'Groq', description: 'low-latency hosted inference', model: 'groq/compound-mini', key: 'GROQ_API_KEY' },
   { id: 'together', label: 'Together AI', description: 'open-model inference', model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', key: 'TOGETHER_API_KEY' },
   { id: 'deepseek', label: 'DeepSeek', description: 'chat and coding models', model: 'deepseek-chat', key: 'DEEPSEEK_API_KEY' },
   { id: 'fireworks', label: 'Fireworks AI', description: 'OpenAI-compatible model API', model: 'accounts/fireworks/models/llama-v3p3-70b-instruct', key: 'FIREWORKS_API_KEY' },

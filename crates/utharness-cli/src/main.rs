@@ -136,7 +136,11 @@ struct ModelArgs {
 
 #[derive(Subcommand, Debug)]
 enum ModelAction {
-    List,
+    List {
+        /// Emit a stable machine-readable model catalog.
+        #[arg(long)]
+        json: bool,
+    },
     Test {
         #[arg(default_value = "auto")]
         provider: String,
@@ -499,7 +503,9 @@ fn main() -> Result<()> {
             println!("TOOLS\n✓ read_file       SAFE\n✓ list_directory  SAFE\n! write_file      ASK\n! shell           ASK\n! browser_open    ASK\n✓ git_diff        SAFE");
             Ok(())
         }
-        Some(CommandKind::Models(args)) => models(args.action.unwrap_or(ModelAction::List)),
+        Some(CommandKind::Models(args)) => {
+            models(args.action.unwrap_or(ModelAction::List { json: false }))
+        }
         Some(CommandKind::Mcp) => mcp(),
         Some(CommandKind::Termux(args)) => termux_command(args),
     }
@@ -1118,7 +1124,7 @@ fn setup(args: SetupArgs) -> Result<()> {
     if let Some(model) = args.model.as_deref() {
         env::set_var("UTHARNESS_MODEL", model);
     }
-    if args.api_key_stdin {
+    let pending_secret = if args.api_key_stdin {
         use std::io::Read;
         let mut secret = String::new();
         io::stdin()
@@ -1126,10 +1132,12 @@ fn setup(args: SetupArgs) -> Result<()> {
             .context("failed to read API key from stdin")?;
         let variable =
             provider_key_variable(&provider).context("this provider does not accept an API key")?;
-        let secret = secret.trim_end_matches(['\r', '\n']);
-        setup_system::persist_secret(variable, secret)?;
-        env::set_var(variable, secret);
-    }
+        let secret = secret.trim_end_matches(['\r', '\n']).to_string();
+        env::set_var(variable, &secret);
+        Some((variable, secret))
+    } else {
+        None
+    };
     let status = if provider == "offline" {
         None
     } else {
@@ -1181,6 +1189,15 @@ fn setup(args: SetupArgs) -> Result<()> {
         tools,
         ui: UiConfig::default(),
     };
+    if let Some(status) = &status {
+        if status.configured && !args.skip_validation {
+            let gateway = Gateway::new_from_environment(ProviderKind::parse(&config.provider)?)?;
+            gateway.validate_model()?;
+        }
+    }
+    if let Some((variable, secret)) = pending_secret {
+        setup_system::persist_secret(variable, &secret)?;
+    }
     let config_path = env::current_dir()?.join("utharness.json");
     fs::write(
         &config_path,
@@ -1220,9 +1237,6 @@ fn setup(args: SetupArgs) -> Result<()> {
                 println!("✓ no API key required for this provider");
             }
             if !args.skip_validation {
-                let gateway =
-                    Gateway::new_from_environment(ProviderKind::parse(&config.provider)?)?;
-                gateway.validate_model()?;
                 println!("✓ provider and model validated");
             }
         } else {
@@ -1325,15 +1339,35 @@ fn agents(action: AgentAction) -> Result<()> {
 
 fn models(action: ModelAction) -> Result<()> {
     match action {
-        ModelAction::List => {
-            println!("MODELS");
+        ModelAction::List { json } => {
             if let Ok(gateway) = Gateway::from_environment() {
                 let models = gateway.models()?;
-                for model in models {
-                    println!("{}", model);
+                let active = format!("{}/{}", gateway.provider(), gateway.model());
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "provider": gateway.provider(),
+                            "models": models,
+                            "active": active,
+                        })
+                    );
+                } else {
+                    println!("MODELS");
+                    for model in models {
+                        println!("{}", model);
+                    }
+                    println!("active: {active}");
                 }
-                println!("active: {}/{}", gateway.provider(), gateway.model());
             } else {
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::json!({"provider": "offline", "models": ["offline/deterministic-planner"], "active": "offline/deterministic-planner"})
+                    );
+                    return Ok(());
+                }
+                println!("MODELS");
                 for provider in supported_providers()
                     .into_iter()
                     .filter(|provider| provider.configured)

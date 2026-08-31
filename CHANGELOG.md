@@ -4,6 +4,14 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.15] — 2026-08-31
+
+### Fixed
+
+- Replaced the stale Groq default with `groq/compound-mini`, which is returned by the live Groq model catalog used in verification.
+- Added structured `utharness models list --json` output and updated the interactive selector to use it, preserve the active selection, and avoid parsing display text.
+- Moved provider/model validation ahead of workspace and global configuration writes, so an unavailable model cannot persist a stale selection.
+
 ## [0.2.14] — 2026-08-31
 
 ### Fixed

@@ -62,7 +62,7 @@ impl ProviderKind {
             ),
             Self::Groq => (
                 "https://api.groq.com/openai/v1",
-                "llama-3.3-70b-versatile",
+                "groq/compound-mini",
                 Some("GROQ_API_KEY"),
             ),
             Self::Together => (
