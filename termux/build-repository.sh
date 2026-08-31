@@ -8,7 +8,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INPUT_DIR="${1:-$ROOT/dist/termux}"
 OUTPUT_DIR="${2:-$ROOT/dist/termux-repository}"
 KEY_ID="${UTHARNESS_GPG_KEY_ID:-}"
-VERSION="${UTHARNESS_VERSION:-0.2.11}"
+VERSION="${UTHARNESS_VERSION:-0.2.12}"
 
 if [[ -z "$KEY_ID" && "${UTHARNESS_ALLOW_UNSIGNED:-0}" != "1" ]]; then
   echo 'UTHARNESS_GPG_KEY_ID is required for a publishable signed repository.' >&2

@@ -4,6 +4,23 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.12] — 2026-08-31
+
+### Added
+
+- Persistent reference-matched UTHARNESS banner in the native CLI and full-screen terminal UI, including the terminal prompt block, per-letter ANSI colors, navigation blocks, and tagline.
+- Responsive full, compressed, wrapped, compact, and minimal layouts for terminals from 20 columns through ultrawide displays.
+- CLI flags and persistent settings for banner visibility, layout, and Nerd Font, Unicode, or ASCII icons.
+
+### Improved
+
+- Capability-aware TrueColor, ANSI 256, ANSI 16, monochrome, Unicode, and ASCII fallbacks.
+- Short-height and resize handling so the header, composer, and status remain visible without duplicate banners or terminal-history noise.
+
+### Verification
+
+- Added width-matrix, color, icon, configuration, packaging, and real PTY screenshot coverage for 20, 30, 40, 60, 80, 100, 120, 160, and 200 columns.
+
 ## [0.2.11] — 2026-08-30
 
 ### Added
