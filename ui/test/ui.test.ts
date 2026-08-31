@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { editComposer } from '../src/tui/composer.js';
 import { bannerVariant, effectiveLayout, getBreakpoint, getTermuxBreakpoint, workspaceWidths } from '../src/tui/responsive.js';
-import { fullBanner } from '../src/components.js';
+import { bannerHeight, bannerTier, detectTerminalCapabilities, letterColors, resolveIconMode } from '../src/tui/banner.js';
 import { getColorMode } from '../src/tui/theme.js';
 import { loadUiState, normalizeUiState, saveUiState } from '../src/tui/state.js';
 import { loadSnapshot, parseGitSnapshot } from '../src/runtime.js';
@@ -32,14 +32,22 @@ test('maps Termux mobile-first width tiers', () => {
 
 test('collapses workspace mode and banner responsively', () => {
   assert.equal(effectiveLayout('workspace', 'standard'), 'focus'); assert.equal(effectiveLayout('workspace', 'wide'), 'workspace');
-  assert.equal(bannerVariant('full', 'wide', 40), 'full'); assert.equal(bannerVariant('full', 'standard', 30), 'medium');
-  assert.equal(bannerVariant('compact', 'wide', 40), 'small'); assert.equal(bannerVariant('hide', 'wide', 40), 'hide');
+  assert.equal(bannerVariant('full', 'wide', 40), 'full'); assert.equal(bannerVariant('full', 'standard', 30), 'full');
+  assert.equal(bannerVariant('compact', 'wide', 40), 'compact'); assert.equal(bannerVariant('hide', 'wide', 40), 'hide');
   const widths = workspaceWidths(120); assert.equal(widths.navigation + widths.chat + widths.inspector, 118);
 });
 
-test('keeps the full ASCII banner within the reduced geometry', () => {
-  assert.equal(fullBanner.length, 4);
-  assert.ok(fullBanner.every(line => line.length <= 56));
+test('maps the complete banner width and height matrix without hiding by default', () => {
+  assert.deepEqual([20, 30, 40, 60, 80, 100, 120, 160, 200].map(width => bannerTier(width, 40, 'full')), ['minimal', 'minimal', 'compact', 'wrapped', 'wrapped', 'compressed', 'full', 'full', 'full']);
+  assert.ok(['minimal', 'compact', 'wrapped', 'compressed', 'full'].every(tier => bannerHeight(tier as Parameters<typeof bannerHeight>[0]) > 0));
+  assert.equal(letterColors.length, 9);
+});
+
+test('falls back safely when Nerd Fonts, Unicode, or color are unavailable', () => {
+  assert.equal(resolveIconMode('nerd', { TERM: 'xterm-256color' }), 'unicode');
+  assert.equal(resolveIconMode('nerd', { TERM: 'xterm-256color', NERD_FONT: '1' }), 'nerd');
+  assert.equal(resolveIconMode('unicode', { TERM: 'dumb' }), 'ascii');
+  assert.deepEqual(detectTerminalCapabilities({ TERM: 'dumb', NO_COLOR: '1' }), { unicode: false, nerdFonts: false, color: false });
 });
 
 test('respects terminal color capability fallbacks', () => {

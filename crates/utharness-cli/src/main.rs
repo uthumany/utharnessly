@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use skills::SkillRegistry;
@@ -26,8 +26,19 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[derive(Parser, Debug)]
 #[command(name = "utharness", version = VERSION, about = "Utharness Agent Terminal — local-first autonomous work")]
 struct Cli {
+    #[arg(long, global = true, value_enum, conflicts_with = "no_banner")]
+    banner: Option<CliBannerMode>,
+    #[arg(long, global = true)]
+    no_banner: bool,
     #[command(subcommand)]
     command: Option<CommandKind>,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum CliBannerMode {
+    Full,
+    Compact,
+    Minimal,
 }
 
 #[derive(Subcommand, Debug)]
@@ -105,6 +116,25 @@ struct RuntimeConfig {
     model: String,
     permission_mode: String,
     tools: Vec<String>,
+    #[serde(default)]
+    ui: UiConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UiConfig {
+    banner: bool,
+    banner_mode: String,
+    icons: String,
+}
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            banner: true,
+            banner_mode: "full".into(),
+            icons: "unicode".into(),
+        }
+    }
 }
 
 #[derive(Args, Debug)]
@@ -176,6 +206,7 @@ enum AgentAction {
 #[derive(Subcommand, Debug)]
 enum ConfigAction {
     Show,
+    Set { key: String, value: String },
 }
 
 #[derive(Subcommand, Debug)]
@@ -361,8 +392,26 @@ fn main() -> Result<()> {
         .compact()
         .init();
     let cli = Cli::parse();
+    if cli.no_banner {
+        env::set_var("UTHARNESS_BANNER", "hide");
+    }
+    if let Some(mode) = cli.banner {
+        env::set_var(
+            "UTHARNESS_BANNER",
+            match mode {
+                CliBannerMode::Full => "full",
+                CliBannerMode::Compact => "compact",
+                CliBannerMode::Minimal => "minimal",
+            },
+        );
+    }
     if !matches!(&cli.command, Some(CommandKind::Setup(_))) {
         apply_runtime_config()?;
+    }
+    if io::stdout().is_terminal()
+        && matches!(&cli.command, Some(command) if !matches!(command, CommandKind::Setup(_) | CommandKind::Tui(_) | CommandKind::Init(_) | CommandKind::Autonomous(_)))
+    {
+        banner::print_startup_banner(VERSION)?;
     }
     match cli.command {
         None => launch_tui(false),
@@ -386,10 +435,10 @@ fn main() -> Result<()> {
         Some(CommandKind::Doctor) => doctor(),
         Some(CommandKind::Update) => update(),
         Some(CommandKind::Uninstall) => uninstall(),
-        Some(CommandKind::Config { action }) => {
-            let _ = action.unwrap_or(ConfigAction::Show);
-            config_show()
-        }
+        Some(CommandKind::Config { action }) => match action.unwrap_or(ConfigAction::Show) {
+            ConfigAction::Show => config_show(),
+            ConfigAction::Set { key, value } => config_set(&key, &value),
+        },
         Some(CommandKind::Sessions { action }) => sessions(action.unwrap_or(SessionAction::List)),
         Some(CommandKind::Memory { action }) => memory(action.unwrap_or(MemoryAction::List)),
         Some(CommandKind::Checkpoint) => checkpoint(),
@@ -976,6 +1025,7 @@ fn setup(args: SetupArgs) -> Result<()> {
         model,
         permission_mode: permission_mode.into(),
         tools,
+        ui: UiConfig::default(),
     };
     let config_path = env::current_dir()?.join("utharness.json");
     fs::write(
@@ -1306,8 +1356,54 @@ fn config_show() -> Result<()> {
     if let Some(saved) = saved {
         println!("setup_mode = \"{}\"", saved.mode);
         println!("tools = \"{}\"", saved.tools.join(","));
+        println!("ui.banner = {}", saved.ui.banner);
+        println!("ui.banner_mode = \"{}\"", saved.ui.banner_mode);
+        println!("ui.icons = \"{}\"", saved.ui.icons);
     }
     println!("theme = \"utharness-carbon\"");
+    Ok(())
+}
+
+fn config_set(key: &str, value: &str) -> Result<()> {
+    let mut config = load_runtime_config()?.unwrap_or(RuntimeConfig {
+        schema_version: 1,
+        mode: "blank".into(),
+        provider: "offline".into(),
+        model: "deterministic-planner".into(),
+        permission_mode: "safe".into(),
+        tools: vec!["workspace_read".into()],
+        ui: UiConfig::default(),
+    });
+    match key {
+        "ui.banner" => {
+            config.ui.banner = match value.to_ascii_lowercase().as_str() {
+                "true" | "on" | "1" => true,
+                "false" | "off" | "0" => false,
+                _ => anyhow::bail!("ui.banner expects true or false"),
+            }
+        }
+        "ui.banner_mode" | "ui.bannerMode" => {
+            let normalized = value.to_ascii_lowercase();
+            if !matches!(normalized.as_str(), "full" | "compact" | "minimal") {
+                anyhow::bail!("ui.banner_mode expects full, compact, or minimal");
+            }
+            config.ui.banner_mode = normalized;
+        }
+        "ui.icons" => {
+            let normalized = value.to_ascii_lowercase();
+            if !matches!(normalized.as_str(), "nerd" | "unicode" | "ascii") {
+                anyhow::bail!("ui.icons expects nerd, unicode, or ascii");
+            }
+            config.ui.icons = normalized;
+        }
+        _ => anyhow::bail!("unsupported configuration key '{key}'"),
+    }
+    let path = env::current_dir()?.join("utharness.json");
+    fs::write(
+        &path,
+        format!("{}\n", serde_json::to_string_pretty(&config)?),
+    )?;
+    println!("set {key} = {value} in {}", path.display());
     Ok(())
 }
 
@@ -1416,6 +1512,19 @@ fn apply_runtime_config() -> Result<()> {
     }
     if env::var_os("UTHARNESS_TOOLS").is_none() {
         env::set_var("UTHARNESS_TOOLS", config.tools.join(","));
+    }
+    if env::var_os("UTHARNESS_BANNER").is_none() {
+        env::set_var(
+            "UTHARNESS_BANNER",
+            if config.ui.banner {
+                config.ui.banner_mode.as_str()
+            } else {
+                "hide"
+            },
+        );
+    }
+    if env::var_os("UTHARNESS_ICONS").is_none() {
+        env::set_var("UTHARNESS_ICONS", &config.ui.icons);
     }
     Ok(())
 }

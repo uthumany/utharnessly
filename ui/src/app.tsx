@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useApp, useInput, useStdout } from 'ink';
 import type { FSWatcher } from 'chokidar';
-import { Banner, Header, Inspector, MessageRow, Navigation, Overlay, palette, StartupTips, StatusBar, WorkspaceWarning } from './components.js';
+import { bannerHeight, Inspector, MessageRow, Navigation, Overlay, palette, PersistentHeader, StartupTips, StatusBar, WorkspaceWarning } from './components.js';
 import { loadSnapshot, runSkillCommand, submitPrompt, watchRuntime } from './runtime.js';
 import { Composer } from './tui/composer.js';
-import { bannerVariant, effectiveLayout, getBreakpoint, getTermuxBreakpoint, workspaceWidths } from './tui/responsive.js';
+import { effectiveLayout, getBreakpoint, getTermuxBreakpoint, workspaceWidths } from './tui/responsive.js';
+import { bannerTier } from './tui/banner.js';
 import { defaultUiState, loadUiState, saveUiState } from './tui/state.js';
 import { getColorMode, tone } from './tui/theme.js';
 import type { Message, OverlayKind, PaletteItem, PersistedUiState, RuntimeSnapshot } from './types.js';
@@ -75,22 +76,24 @@ export function App() {
   const [tick, setTick] = useState(0);
   const [composerFocused, setComposerFocused] = useState(true);
 
-  const columns = Math.max(40, stdout.columns ?? process.stdout.columns ?? 120);
-  const rows = Math.max(15, stdout.rows ?? process.stdout.rows ?? 36);
+  const columns = Math.max(20, stdout.columns ?? process.stdout.columns ?? 120);
+  const rows = Math.max(10, stdout.rows ?? process.stdout.rows ?? 36);
   const breakpoint = snapshot?.platform === 'termux' ? getTermuxBreakpoint(columns) : getBreakpoint(columns);
   const mode = effectiveLayout(ui.layoutMode, breakpoint);
   const colorMode = getColorMode();
   const compact = breakpoint === 'tiny' || breakpoint === 'compact';
-  const contentWidth = Math.max(28, columns - (compact ? 0 : 4));
-  const banner = bannerVariant(ui.bannerMode, breakpoint, rows);
-  const bannerHeight = banner === 'full' ? 5 : banner === 'medium' ? 3 : banner === 'hide' ? 0 : 2;
+  const contentWidth = Math.max(20, columns - (compact ? 0 : 4));
+  const banner = bannerTier(columns, rows, ui.bannerMode);
+  const headerHeight = bannerHeight(banner);
   const showTips = !compact && rows >= 32;
   const showWarning = Boolean(snapshot && !snapshot.projectSpecific && !compact && rows >= 28);
-  const fixedHeight = 1 + bannerHeight + (showTips ? 4 : 0) + (showWarning ? 4 : 0) + 4 + 2 + (overlay ? Math.min(15, (overlayDefaults[overlay]?.length ?? 1) + 3) : 0);
-  const chatHeight = Math.max(3, rows - fixedHeight);
+  const showInputHints = columns >= 40 && rows >= 15;
+  const footerHeight = 3 + (columns < 40 ? 1 : 3) + (showInputHints ? 1 : 0);
+  const fixedHeight = headerHeight + (showTips ? 4 : 0) + (showWarning ? 4 : 0) + footerHeight + (overlay ? Math.min(15, (overlayDefaults[overlay]?.length ?? 1) + 3) : 0);
+  const chatHeight = Math.max(1, rows - fixedHeight);
   const visibleCount = Math.max(1, Math.floor(chatHeight / (compact ? 3 : 4)));
 
-  useEffect(() => { void loadUiState().then(state => { setUi(state); setHydrated(true); }); }, []);
+  useEffect(() => { void loadUiState().then(state => { const bannerMode = ['full', 'compact', 'minimal', 'hide'].includes(process.env.UTHARNESS_BANNER ?? '') ? process.env.UTHARNESS_BANNER as PersistedUiState['bannerMode'] : state.bannerMode; const iconMode = ['nerd', 'unicode', 'ascii'].includes(process.env.UTHARNESS_ICONS ?? '') ? process.env.UTHARNESS_ICONS as PersistedUiState['iconMode'] : state.iconMode; setUi({ ...state, bannerMode, iconMode }); setHydrated(true); }); }, []);
   useEffect(() => { if (!hydrated) return; const timer = setTimeout(() => void saveUiState(ui).catch(() => undefined), 180); return () => clearTimeout(timer); }, [ui, hydrated]);
   useEffect(() => { if (!streaming || ui.reducedMotion) return; const timer = setInterval(() => setTick(value => value + 1), 100); return () => clearInterval(timer); }, [streaming, ui.reducedMotion]);
 
@@ -143,7 +146,7 @@ export function App() {
     if (command === '/logs') { openOverlay('logs'); return true; }
     if (command === '/context') { openOverlay('context'); return true; }
     if (command === '/status') { void refreshSnapshot(); return true; }
-    if (command === '/banner') { const next = argument === 'hide' || argument === 'compact' || argument === 'full' ? argument : 'full'; setUi(current => ({ ...current, bannerMode: next })); return true; }
+    if (command === '/banner') { const next = argument === 'hide' || argument === 'minimal' || argument === 'compact' || argument === 'full' ? argument : 'full'; setUi(current => ({ ...current, bannerMode: next })); return true; }
     if (command === '/skills') { void runSkillCommand(['list', '12']).then(text => { setMessages(current => unique([...current, { id: `${Date.now()}-skills`, role: 'system', text, time: now() }])); }); return true; }
     return false;
   };
@@ -200,14 +203,13 @@ export function App() {
   const chat = <Box flexDirection="column" width={chatWidth} height={chatHeight} overflow="hidden" paddingX={mode === 'workspace' ? 1 : 0}>{runtimeError ? <Text color={tone(palette.error, colorMode)}>Runtime: {runtimeError}</Text> : null}{visibleMessages.map(message => <MessageRow key={message.id} message={message} width={mode === 'workspace' ? chatWidth - 3 : chatWidth} colorMode={colorMode} tick={tick} />)}{streaming ? <Text color={tone(palette.primary, colorMode)}>  {ui.reducedMotion ? '◆' : '◐'} UTHARNESS is working…</Text> : null}</Box>;
 
   return <Box flexDirection="column" width="100%" height={rows} paddingX={compact ? 0 : 1}>
-    <Header mode={mode} colorMode={colorMode} compact={compact} />
-    <Banner variant={banner} colorMode={colorMode} />
+    <PersistentHeader width={columns} rows={rows} mode={ui.bannerMode} colorMode={colorMode} iconMode={ui.iconMode} />
     {showTips ? <StartupTips colorMode={colorMode} /> : null}
     {showWarning ? <WorkspaceWarning colorMode={colorMode} /> : null}
     {mode === 'workspace' && snapshot ? <Box height={chatHeight}><Navigation colorMode={colorMode} width={workspaceWidths(columns).navigation} />{chat}<Inspector snapshot={snapshot} colorMode={colorMode} width={workspaceWidths(columns).inspector} /></Box> : chat}
     {derivedOverlay ? <Overlay kind={derivedOverlay} items={visibleItems} selected={selected} query={query} width={contentWidth} colorMode={colorMode} /> : null}
     <Composer value={ui.draft} onChange={setDraft} onSubmit={send} width={contentWidth} colorMode={colorMode} focused={composerFocused && !overlay} disabled={streaming || Boolean(overlay)} placeholder={compact ? 'Ask Utharness…' : 'Type your message or @path/to/file'} />
-    <Text color={tone(palette.muted, colorMode)}> {composerFocused ? 'Enter send · Shift+Enter newline' : 'Tab focus composer'} · Ctrl+K commands · Ctrl+B {mode === 'focus' ? 'workspace' : 'focus'}</Text>
+    {showInputHints ? <Text color={tone(palette.muted, colorMode)}> {composerFocused ? 'Enter send · Shift+Enter newline' : 'Tab focus composer'} · Ctrl+K commands · Ctrl+B {mode === 'focus' ? 'workspace' : 'focus'}</Text> : null}
     {snapshot ? <StatusBar snapshot={snapshot} width={contentWidth} colorMode={colorMode} /> : <Text color={tone(palette.muted, colorMode)}>Loading runtime status…</Text>}
   </Box>;
 }

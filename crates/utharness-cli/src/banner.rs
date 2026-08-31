@@ -1,370 +1,341 @@
-use crossterm::{
-    execute,
-    style::{Color, ResetColor},
-    terminal,
-};
+use crossterm::terminal;
 use std::io::{self, IsTerminal, Write};
-use std::thread;
-use std::time::Duration;
 
-/// Large Unicode-safe UTHY block lettering for terminals with enough width.
-pub const UNICODE_BANNER: [&str; 4] = [
-    "██╗ ██╗█████╗██╗ ██╗██╗ ██╗",
-    "██║ ██║╚═██╔╝██████║╚████╔╝",
-    "██║ ██║  ██║ ██╔═██║ ╚██╔╝ ",
-    "╚████╔╝  ██║ ██║ ██║  ██║  ",
+const WORD: &str = "UTHARNESS";
+const COLORS: [(u8, u8, u8); 9] = [
+    (180, 76, 255),
+    (32, 214, 244),
+    (85, 219, 36),
+    (255, 210, 31),
+    (255, 138, 22),
+    (255, 61, 79),
+    (52, 120, 246),
+    (180, 76, 255),
+    (180, 76, 255),
+];
+const GLYPHS: [[&str; 3]; 8] = [
+    ["█ █", "█ █", "███"],
+    ["███", " █ ", " █ "],
+    ["█ █", "███", "█ █"],
+    [" █ ", "███", "█ █"],
+    ["██ ", "██ ", "█ █"],
+    ["█ █", "███", "█ █"],
+    ["███", "██ ", "███"],
+    [" ██", " █ ", "██ "],
 ];
 
-/// Smaller ASCII-only UTHY lettering for medium or forced-ASCII terminals.
-pub const ASCII_BANNER: [&str; 3] = [
-    "UU UU TTTTT HH HH YY YY",
-    "UU UU   TT  HHHHH  YYY ",
-    "UUUUU   TT  HH HH   YY ",
-];
-
-#[derive(Clone, Copy, Debug)]
-pub struct BannerTheme {
-    pub wordmark: Color,
-    pub subtitle: Color,
-    pub version: Color,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BannerLayout {
+    Full,
+    Compressed,
+    Wrapped,
+    Compact,
+    Minimal,
+    Hidden,
 }
-
-impl Default for BannerTheme {
-    fn default() -> Self {
-        Self {
-            wordmark: Color::Rgb {
-                r: 255,
-                g: 196,
-                b: 58,
-            },
-            subtitle: Color::Rgb {
-                r: 255,
-                g: 157,
-                b: 153,
-            },
-            version: Color::Grey,
-        }
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BannerPreference {
+    Full,
+    Compact,
+    Minimal,
+    Hidden,
 }
-
-impl BannerTheme {
+impl BannerPreference {
     pub fn from_environment() -> Self {
-        match std::env::var("UTHARNESS_THEME")
-            .unwrap_or_else(|_| "utharness-carbon".into())
+        match std::env::var("UTHARNESS_BANNER")
+            .unwrap_or_else(|_| "full".into())
             .to_ascii_lowercase()
             .as_str()
         {
-            "midnight-cyan" => Self {
-                wordmark: Color::Cyan,
-                subtitle: Color::Blue,
-                version: Color::Grey,
-            },
-            "ember" => Self {
-                wordmark: Color::Yellow,
-                subtitle: Color::Red,
-                version: Color::Grey,
-            },
-            "mono-black" => Self {
-                wordmark: Color::White,
-                subtitle: Color::Grey,
-                version: Color::DarkGrey,
-            },
-            _ => Self::default(),
+            "hide" | "hidden" | "off" | "false" => Self::Hidden,
+            "minimal" => Self::Minimal,
+            "compact" => Self::Compact,
+            _ => Self::Full,
         }
     }
 }
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BannerMode {
-    Unicode,
-    Ascii,
-    Compact,
+enum ColorDepth {
+    None,
+    Ansi16,
+    Ansi256,
+    TrueColor,
 }
 
 pub fn terminal_width() -> u16 {
-    if let Ok(columns) = std::env::var("COLUMNS") {
-        if let Ok(width) = columns.parse::<u16>() {
-            return width.max(1);
-        }
-    }
-    terminal::size()
-        .map(|(width, _)| width)
+    std::env::var("COLUMNS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .or_else(|| terminal::size().ok().map(|(w, _)| w))
         .unwrap_or(80)
         .max(1)
 }
-
-pub fn mode_for_width(width: u16) -> BannerMode {
-    if width < 42 {
-        BannerMode::Compact
-    } else if std::env::var_os("NO_COLOR").is_some()
-        || std::env::var_os("UTHARNESS_ASCII").is_some()
-        || width < 72
-    {
-        BannerMode::Ascii
+pub fn layout_for_width(width: u16, preference: BannerPreference) -> BannerLayout {
+    if preference == BannerPreference::Hidden {
+        return BannerLayout::Hidden;
+    }
+    if width < 40 || preference == BannerPreference::Minimal {
+        return BannerLayout::Minimal;
+    }
+    if width < 60 || preference == BannerPreference::Compact {
+        return BannerLayout::Compact;
+    }
+    if width < 90 {
+        BannerLayout::Wrapped
+    } else if width < 120 {
+        BannerLayout::Compressed
     } else {
-        BannerMode::Unicode
+        BannerLayout::Full
+    }
+}
+fn color_depth(ansi: bool) -> ColorDepth {
+    if !ansi
+        || std::env::var_os("NO_COLOR").is_some()
+        || std::env::var("TERM").is_ok_and(|v| v == "dumb")
+    {
+        return ColorDepth::None;
+    }
+    if std::env::var("COLORTERM").is_ok_and(|v| v.contains("truecolor") || v.contains("24bit"))
+        || std::env::var("UTHARNESS_COLOR").is_ok_and(|v| v == "truecolor")
+    {
+        ColorDepth::TrueColor
+    } else if std::env::var("TERM").is_ok_and(|v| v.contains("256color"))
+        || std::env::var("UTHARNESS_COLOR").is_ok_and(|v| v == "ansi256")
+    {
+        ColorDepth::Ansi256
+    } else {
+        ColorDepth::Ansi16
+    }
+}
+fn start_color(index: usize, depth: ColorDepth) -> String {
+    let (r, g, b) = COLORS[index.min(8)];
+    match depth {
+        ColorDepth::None => String::new(),
+        ColorDepth::TrueColor => format!("\x1b[38;2;{r};{g};{b}m"),
+        ColorDepth::Ansi256 => format!(
+            "\x1b[38;5;{}m",
+            [129, 45, 40, 220, 208, 203, 69, 129, 129][index.min(8)]
+        ),
+        ColorDepth::Ansi16 => format!(
+            "\x1b[{}m",
+            [35, 36, 32, 33, 33, 31, 34, 35, 35][index.min(8)]
+        ),
+    }
+}
+fn reset(depth: ColorDepth) -> &'static str {
+    if depth == ColorDepth::None {
+        ""
+    } else {
+        "\x1b[0m"
+    }
+}
+fn paint(text: &str, index: usize, depth: ColorDepth) -> String {
+    format!("{}{text}{}", start_color(index, depth), reset(depth))
+}
+fn colored_word(depth: ColorDepth) -> String {
+    WORD.chars()
+        .enumerate()
+        .map(|(i, c)| paint(&c.to_string(), i, depth))
+        .collect()
+}
+fn art_line(row: usize, depth: ColorDepth, doubled: bool) -> String {
+    WORD.chars()
+        .enumerate()
+        .map(|(i, c)| {
+            let g = match c {
+                'U' => 0,
+                'T' => 1,
+                'H' => 2,
+                'A' => 3,
+                'R' => 4,
+                'N' => 5,
+                'E' => 6,
+                _ => 7,
+            };
+            let s = if doubled {
+                GLYPHS[g][row].replace('█', "██")
+            } else {
+                GLYPHS[g][row].into()
+            };
+            format!("{}{} ", start_color(i, depth), s)
+        })
+        .collect::<String>()
+        + reset(depth)
+}
+fn icons(ascii: bool) -> [&'static str; 7] {
+    if ascii {
+        ["[A]", "[M]", "[S]", "[C]", "[D]", "[T]", ">_"]
+    } else {
+        ["◉", "◇", "</>", "⎇", "▤", "⚒", ">_"]
     }
 }
 
-pub fn reduced_motion() -> bool {
-    std::env::var_os("NO_COLOR").is_some()
-        || std::env::var_os("UTHARNESS_REDUCED_MOTION").is_some()
-        || std::env::var_os("REDUCED_MOTION").is_some()
-}
-
-/// Animation is opt-in so `utharness` paints its identity immediately. Set
-/// `UTHARNESS_BANNER_ANIMATION=typein` for the restrained type-in effect.
-pub fn animation_enabled() -> bool {
-    !reduced_motion()
-        && matches!(
-            std::env::var("UTHARNESS_BANNER_ANIMATION")
-                .unwrap_or_default()
-                .to_ascii_lowercase()
-                .as_str(),
-            "typein" | "type-in"
-        )
+fn terminal_block_line(row: usize, depth: ColorDepth, ascii: bool) -> String {
+    let (top, side, bottom) = if ascii {
+        ("+----------+", "|", "+----------+")
+    } else {
+        ("╔══════════╗", "║", "╚══════════╝")
+    };
+    match row {
+        0 => paint(top, 0, depth),
+        1 => format!(
+            "{}{} {}>_{}      {}{}",
+            start_color(0, depth),
+            side,
+            start_color(2, depth),
+            start_color(0, depth),
+            side,
+            reset(depth)
+        ),
+        _ => paint(bottom, 0, depth),
+    }
 }
 
 pub fn render_banner(width: u16, version: &str, ansi: bool) -> String {
-    let mode = mode_for_width(width);
-    render_banner_in_mode(width, version, ansi, mode)
+    render_banner_with(width, version, ansi, BannerPreference::from_environment())
 }
-
-fn render_banner_in_mode(width: u16, version: &str, ansi: bool, mode: BannerMode) -> String {
-    let theme = BannerTheme::from_environment();
-    let mut lines: Vec<(String, Color)> = Vec::new();
-    match mode {
-        BannerMode::Compact => {
-            lines.push(("UTHY".into(), theme.wordmark));
-            lines.push(("AGENT TERMINAL".into(), theme.subtitle));
-            lines.push((format!("v{version}"), theme.version));
-        }
-        BannerMode::Unicode | BannerMode::Ascii => {
-            let art: Vec<String> = if mode == BannerMode::Unicode {
-                UNICODE_BANNER
-                    .iter()
-                    .map(|line| format!("{line}░"))
-                    .collect()
-            } else {
-                ASCII_BANNER
-                    .iter()
-                    .map(|line| (*line).to_string())
-                    .collect()
-            };
-            let art_len = art.len();
-            for (index, line) in art.into_iter().enumerate() {
-                lines.push((line, gradient_color(index, art_len)));
-            }
-            if mode == BannerMode::Unicode {
-                lines.push((
-                    "  ─────────────────────────────░░".into(),
-                    Color::Rgb {
-                        r: 226,
-                        g: 119,
-                        b: 128,
-                    },
-                ));
-            }
-            lines.push(("      U T H Y".into(), theme.wordmark));
-            lines.push(("    AGENT TERMINAL".into(), theme.subtitle));
-            lines.push((format!("         v{version}"), theme.version));
-        }
+pub fn render_banner_with(
+    width: u16,
+    version: &str,
+    ansi: bool,
+    preference: BannerPreference,
+) -> String {
+    let layout = layout_for_width(width, preference);
+    if layout == BannerLayout::Hidden {
+        return String::new();
     }
-
-    let max_width = lines
-        .iter()
-        .map(|(line, _)| line.chars().count())
-        .max()
-        .unwrap_or(0);
-    let left_pad = if width as usize > max_width + 12 {
-        4
-    } else {
-        2
-    };
-    let mut out = String::new();
-    for (line, color) in lines {
-        let pad = " ".repeat(left_pad);
-        if ansi {
-            out.push_str(&format!(
-                "{}{color}{line}{}\n",
-                pad,
-                ansi_reset(),
-                color = ansi_code(color)
+    let depth = color_depth(ansi);
+    let ascii = std::env::var_os("UTHARNESS_ASCII").is_some()
+        || std::env::var("TERM").is_ok_and(|v| v == "dumb");
+    let mut lines = Vec::new();
+    match layout {
+        BannerLayout::Minimal => lines.push(format!(
+            "{} {} v{version}",
+            colored_word(depth),
+            paint(">_", 2, depth)
+        )),
+        BannerLayout::Compact => {
+            lines.push(format!(
+                "+- {} {} -+",
+                colored_word(depth),
+                paint(">_", 2, depth)
             ));
-        } else {
-            out.push_str(&pad);
-            out.push_str(&line);
-            out.push('\n');
+            lines.push("[A] [M] [S] [C] [D] [T] >_".into());
+            lines.push("AUTONOMOUS AGENT HARNESS".into());
         }
+        BannerLayout::Wrapped | BannerLayout::Compressed | BannerLayout::Full => {
+            let n = usize::min(
+                width.saturating_sub(2) as usize,
+                if layout == BannerLayout::Full {
+                    104
+                } else {
+                    82
+                },
+            );
+            lines.push("-".repeat(n));
+            for row in 0..3 {
+                let wordmark = art_line(row, depth, layout == BannerLayout::Full);
+                lines.push(if layout == BannerLayout::Full {
+                    format!("{}  {wordmark}", terminal_block_line(row, depth, ascii))
+                } else {
+                    wordmark
+                });
+            }
+            lines.push("-".repeat(n));
+            let names = [
+                "AGENTS", "MODELS", "SKILLS", "MCP", "MEMORY", "TOOLS", "TERMINAL",
+            ];
+            let glyphs = icons(ascii);
+            let blocks = names
+                .iter()
+                .enumerate()
+                .map(|(i, name)| paint(&format!("{} {name}", glyphs[i]), i, depth))
+                .collect::<Vec<_>>();
+            if layout == BannerLayout::Wrapped {
+                lines.push(blocks[..4].join("  "));
+                lines.push(blocks[4..].join("  "));
+            } else {
+                lines.push(blocks.join("  "));
+            }
+            lines.push(format!(
+                "{} AUTONOMOUS AI AGENT TERMINAL HARNESS {} v{version}",
+                paint(">", 2, depth),
+                paint("<", 2, depth)
+            ));
+        }
+        BannerLayout::Hidden => {}
     }
-    out
+    lines.into_iter().map(|line| format!("{line}\n")).collect()
 }
-
-fn gradient_color(index: usize, count: usize) -> Color {
-    let palette = [
-        Color::Rgb {
-            r: 255,
-            g: 222,
-            b: 72,
-        },
-        Color::Rgb {
-            r: 255,
-            g: 196,
-            b: 58,
-        },
-        Color::Rgb {
-            r: 255,
-            g: 164,
-            b: 67,
-        },
-        Color::Rgb {
-            r: 255,
-            g: 137,
-            b: 101,
-        },
-        Color::Rgb {
-            r: 255,
-            g: 157,
-            b: 153,
-        },
-        Color::Rgb {
-            r: 247,
-            g: 190,
-            b: 202,
-        },
-    ];
-    let palette_index = if count <= 1 {
-        0
-    } else {
-        index.min(count - 1) * (palette.len() - 1) / (count - 1)
-    };
-    palette[palette_index]
-}
-
-fn ansi_code(color: Color) -> String {
-    match color {
-        Color::Black => "\x1b[30m".into(),
-        Color::DarkGrey => "\x1b[90m".into(),
-        Color::Red | Color::DarkRed => "\x1b[31m".into(),
-        Color::Green | Color::DarkGreen => "\x1b[32m".into(),
-        Color::Yellow | Color::DarkYellow => "\x1b[33m".into(),
-        Color::Blue | Color::DarkBlue => "\x1b[34m".into(),
-        Color::Magenta | Color::DarkMagenta => "\x1b[35m".into(),
-        Color::Cyan | Color::DarkCyan => "\x1b[36m".into(),
-        Color::White | Color::Grey => "\x1b[37m".into(),
-        Color::Rgb { r, g, b } => format!("\x1b[38;2;{r};{g};{b}m"),
-        _ => "\x1b[39m".into(),
-    }
-}
-
-fn ansi_reset() -> &'static str {
-    "\x1b[0m"
-}
-
 pub fn print_onboarding_tips() -> anyhow::Result<()> {
-    let mut stdout = io::stdout();
-    let ansi = stdout.is_terminal() && std::env::var_os("NO_COLOR").is_none();
-    let cyan = if ansi {
-        ansi_code(Color::Cyan)
-    } else {
-        String::new()
-    };
-    let muted = if ansi {
-        ansi_code(Color::DarkGrey)
-    } else {
-        String::new()
-    };
-    let reset = if ansi { ansi_reset() } else { "" };
-    writeln!(stdout, "  {cyan}Tips for getting started:{reset}")?;
+    let mut out = io::stdout();
     writeln!(
-        stdout,
-        "  {muted}1. Ask questions, edit files, or execute commands.{reset}"
+        out,
+        "Tips: ask questions · use @file for context · /help for commands"
     )?;
-    writeln!(
-        stdout,
-        "  {muted}2. Use @file to attach project context.{reset}"
-    )?;
-    writeln!(
-        stdout,
-        "  {muted}3. Create UTHARNESS.md to define project instructions.{reset}"
-    )?;
-    writeln!(stdout, "  {muted}4. Use /help to explore commands.{reset}")?;
-    stdout.flush()?;
-    if ansi && std::env::var_os("UTHARNESS_REDUCED_MOTION").is_none() {
-        let delay = std::env::var("UTHARNESS_STARTUP_SPLASH_MS")
-            .ok()
-            .and_then(|value| value.parse::<u64>().ok())
-            .unwrap_or(650)
-            .min(900);
-        thread::sleep(Duration::from_millis(delay));
-    }
+    out.flush()?;
     Ok(())
 }
-
 pub fn print_startup_banner(version: &str) -> anyhow::Result<()> {
-    let width = terminal_width();
-    let ansi = io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none();
-    let rendered = render_banner(width, version, ansi);
-    let mut stdout = io::stdout();
-    if ansi && animation_enabled() && width >= 42 {
-        for line in rendered.lines() {
-            writeln!(stdout, "{line}")?;
-            stdout.flush()?;
-            thread::sleep(Duration::from_millis(12));
-        }
-    } else {
-        write!(stdout, "{rendered}")?;
+    let mut out = io::stdout();
+    if !out.is_terminal() {
+        return Ok(());
     }
-    if ansi {
-        execute!(stdout, ResetColor)?;
-    }
-    stdout.flush()?;
+    write!(out, "{}", render_banner(terminal_width(), version, true))?;
+    out.flush()?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn renders_uthy_unicode_art_on_wide_terminal() {
-        let output = render_banner_in_mode(120, "0.1.0", false, BannerMode::Unicode);
-        assert!(output.contains(UNICODE_BANNER[0]));
-        assert!(output.contains("U T H Y"));
-        assert!(output.contains("AGENT TERMINAL"));
-        assert!(output.contains("v0.1.0"));
-        assert!(output.contains("░"));
-        assert!(output.starts_with("    "));
+    fn plain(w: u16) -> String {
+        render_banner_with(w, "0.2.11", false, BannerPreference::Full)
     }
-
     #[test]
-    fn falls_back_to_ascii_on_medium_terminal() {
-        let output = render_banner_in_mode(70, "0.1.0", false, BannerMode::Ascii);
-        assert!(output.contains(ASCII_BANNER[0]));
-        assert!(!output.contains(UNICODE_BANNER[0]));
+    fn maps_required_widths() {
+        assert_eq!(
+            [20, 30, 40, 60, 80, 100, 120, 160, 200]
+                .map(|w| layout_for_width(w, BannerPreference::Full)),
+            [
+                BannerLayout::Minimal,
+                BannerLayout::Minimal,
+                BannerLayout::Compact,
+                BannerLayout::Wrapped,
+                BannerLayout::Wrapped,
+                BannerLayout::Compressed,
+                BannerLayout::Full,
+                BannerLayout::Full,
+                BannerLayout::Full
+            ]
+        );
     }
-
     #[test]
-    fn uses_compact_mode_for_narrow_terminal() {
-        let output = render_banner_in_mode(40, "0.1.0", false, BannerMode::Compact);
-        assert!(output.contains("UTHY"));
-        assert!(output.contains("AGENT TERMINAL"));
-        assert!(!output.contains(UNICODE_BANNER[0]));
+    fn every_plain_line_fits() {
+        for w in [20, 30, 40, 60, 80, 100, 120, 160, 200] {
+            assert!(
+                plain(w)
+                    .lines()
+                    .all(|line| line.chars().count() <= w as usize),
+                "overflow at {w}"
+            );
+        }
     }
-
     #[test]
-    fn ansi_output_contains_gradient_color_sequences() {
-        let output = render_banner_in_mode(120, "0.1.0", true, BannerMode::Unicode);
-        assert!(output.contains("\u{1b}[38;2;255;222;72m"));
-        assert!(output.contains("\u{1b}[38;2;247;190;202m"));
-        assert!(output.contains("\u{1b}[0m"));
+    fn hierarchy_is_present() {
+        let o = plain(120);
+        assert!(o.contains("AGENTS"));
+        assert!(o.contains("MODELS"));
+        assert!(o.contains("AUTONOMOUS AI AGENT TERMINAL HARNESS"));
     }
-
     #[test]
-    fn wide_banner_stays_within_reduced_geometry() {
-        assert_eq!(UNICODE_BANNER.len(), 4);
-        assert!(UNICODE_BANNER.iter().all(|line| line.chars().count() <= 29));
-        assert_eq!(ASCII_BANNER.len(), 3);
-        assert!(ASCII_BANNER.iter().all(|line| line.chars().count() <= 25));
+    fn minimal_never_disappears() {
+        assert!(plain(20).contains("UTHARNESS"));
+        assert!(render_banner_with(120, "x", false, BannerPreference::Hidden).is_empty());
+    }
+    #[test]
+    fn truecolor_is_per_letter() {
+        assert!(start_color(0, ColorDepth::TrueColor).contains("38;2;180;76;255"));
+        assert!(start_color(1, ColorDepth::TrueColor).contains("38;2;32;214;244"));
     }
 }

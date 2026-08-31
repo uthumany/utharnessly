@@ -222,13 +222,10 @@ fn cli_persists_workspace_session_memory_and_doctor() {
 
     let startup = run(bin, workspace.path(), home.path(), &[]);
     assert!(
-        startup.contains("U T H Y"),
-        "startup stdout was: {startup:?}"
-    );
-    assert!(
         startup.contains("AGENT TERMINAL"),
         "startup stdout was: {startup:?}"
     );
+    assert!(!startup.contains("AUTONOMOUS AI AGENT TERMINAL HARNESS"));
 
     let init = run(bin, workspace.path(), home.path(), &["init"]);
     assert!(init.contains("UTHARNESS initialized"));
@@ -319,6 +316,24 @@ fn setup_writes_valid_runtime_configuration_without_secrets() {
     assert!(shown.contains("provider = \"ollama\""));
     assert!(shown.contains("setup_mode = \"full\""));
     assert!(shown.contains("permission_mode = \"ask\""));
+
+    let icons = run(
+        bin,
+        workspace.path(),
+        home.path(),
+        &["config", "set", "ui.icons", "ascii"],
+    );
+    assert!(icons.contains("set ui.icons = ascii"));
+    let banner = run(
+        bin,
+        workspace.path(),
+        home.path(),
+        &["config", "set", "ui.banner", "false"],
+    );
+    assert!(banner.contains("set ui.banner = false"));
+    let updated = std::fs::read_to_string(workspace.path().join("utharness.json")).unwrap();
+    assert!(updated.contains("\"icons\": \"ascii\""));
+    assert!(updated.contains("\"banner\": false"));
 }
 
 #[test]

@@ -1,6 +1,7 @@
 export type Breakpoint = 'tiny' | 'compact' | 'standard' | 'wide';
 export type ColorMode = 'truecolor' | 'ansi256' | 'ansi16' | 'mono';
-export type BannerMode = 'full' | 'compact' | 'hide';
+export type BannerMode = 'full' | 'compact' | 'minimal' | 'hide';
+export type IconMode = 'nerd' | 'unicode' | 'ascii';
 export type LayoutMode = 'focus' | 'workspace';
 export type OverlayKind = 'commands' | 'models' | 'files' | 'agents' | 'tasks' | 'memory' | 'jobs' | 'logs' | 'help' | 'context' | null;
 export type Role = 'utharness' | 'you' | 'system' | 'agent' | 'tool' | 'memory' | 'error';
@@ -18,5 +19,5 @@ export type RuntimeSnapshot = {
 export type PaletteItem = { id: string; label: string; description: string; shortcut?: string; overlay?: Exclude<OverlayKind, null>; command?: string };
 export type PersistedUiState = {
   version: 1; bannerMode: BannerMode; layoutMode: LayoutMode; theme: string; draft: string; history: string[];
-  reducedMotion: boolean; unicode: boolean; selectedModel?: string; selectedProvider?: string;
+  reducedMotion: boolean; unicode: boolean; iconMode: IconMode; selectedModel?: string; selectedProvider?: string;
 };

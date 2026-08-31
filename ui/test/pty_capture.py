@@ -76,7 +76,7 @@ def capture(cols, rows, label, keys=b"", arguments=None):
         handle.write(data)
 
 
-for cols, rows in [(40, 15), (60, 20), (80, 24), (100, 30), (120, 40), (160, 50)]:
+for cols, rows in [(20, 12), (30, 15), (40, 18), (60, 24), (80, 28), (100, 32), (120, 40), (160, 50), (200, 55)]:
     capture(cols, rows, "focus")
 capture(120, 40, "palette", b"\x0b")
 capture(160, 50, "workspace", b"\x02")

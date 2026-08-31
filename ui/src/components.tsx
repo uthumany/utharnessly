@@ -1,33 +1,15 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import gradient from 'gradient-string';
 import stringWidth from 'string-width';
 import wrapAnsi from 'wrap-ansi';
 import type { ColorMode, Message, OverlayKind, PaletteItem, RuntimeSnapshot, ToolCard } from './types.js';
 import { icon, spinnerFrames } from './tui/icons.js';
-import { bannerGradient, palette, tone } from './tui/theme.js';
+import { palette, tone } from './tui/theme.js';
 
 export { getBreakpoint, getTermuxBreakpoint } from './tui/responsive.js';
 export { getColorMode, palette } from './tui/theme.js';
 
-const brand = gradient(bannerGradient);
-export const fullBanner = [
-  '█   █ █████ █   █  ███  ████  █   █ █████  ████  ████',
-  '█   █   █   █████ █   █ █   █ ██  █ ████  ██    ██   ',
-  '█   █   █   █   █ █████ ████  █ █ █ █       ███   ███',
-  '█████   █   █   █ █   █ █  ██ █  ██ █████ ████  ████ '
-];
-const mediumBanner = ['█ █ █▀█ █▀█ █▄ █ █▀▀ █▀▀ █▀▀', '█▄█ █▀  █▀▄ █ ▀█ ██▄ ▄██ ▄██'];
-
-export function Banner({ variant, colorMode }: { variant: 'full' | 'medium' | 'small' | 'tiny' | 'hide'; colorMode: ColorMode }) {
-  if (variant === 'hide') return null;
-  const lines = variant === 'full' ? fullBanner : variant === 'medium' ? mediumBanner : variant === 'small' ? ['UTHARNESS'] : ['UTH'];
-  return <Box flexDirection="column" marginBottom={1}>{lines.map((line, index) => <Text key={`${index}-${line}`} bold={variant === 'small' || variant === 'tiny'} color={colorMode === 'mono' ? undefined : palette.warning}>{colorMode === 'mono' ? line : brand(line)}</Text>)}</Box>;
-}
-
-export function Header({ mode, colorMode, compact }: { mode: string; colorMode: ColorMode; compact: boolean }) {
-  return <Box width="100%" justifyContent="space-between"><Text color={tone(palette.text, colorMode)} bold>utharness-agent — {mode} mode</Text><Text color={tone(palette.muted, colorMode)}>{compact ? 'F1 help' : 'Ctrl+K commands   F1 help'}</Text></Box>;
-}
+export { ResponsiveBanner, PersistentHeader, BannerRenderer, BannerLayout, TerminalCapabilities, IconRegistry, TerminalResizeManager, bannerHeight, bannerTier, letterColors } from './tui/banner.js';
 
 export function StartupTips({ colorMode }: { colorMode: ColorMode }) {
   return <Box flexDirection="column" marginBottom={1}><Text color={tone(palette.warning, colorMode)} bold>Tips for getting started:</Text><Text color={tone(palette.text, colorMode)}>1. Ask questions, edit files, or run commands.</Text><Text color={tone(palette.text, colorMode)}>2. Use <Text color={tone(palette.primary, colorMode)}>@path/to/file</Text> to add context.</Text><Text color={tone(palette.text, colorMode)}>3. Type <Text color={tone(palette.accent, colorMode)}>/help</Text> or press F1.</Text></Box>;
@@ -57,6 +39,7 @@ export function MessageRow({ message, width, colorMode, tick }: { message: Messa
 export function StatusBar({ snapshot, width, colorMode }: { snapshot: RuntimeSnapshot; width: number; colorMode: ColorMode }) {
   const git = `${snapshot.git.branch}${snapshot.git.modified || snapshot.git.untracked ? ` M${snapshot.git.modified} ?${snapshot.git.untracked}` : ''}${snapshot.git.additions || snapshot.git.deletions ? ` +${snapshot.git.additions} -${snapshot.git.deletions}` : ''}`;
   const segments = [snapshot.workspace, snapshot.permission, `${snapshot.provider}/${snapshot.model}`, git, snapshot.context, snapshot.activeAgents ? `Agents ${snapshot.activeAgents}` : 'Agents 0'];
+  if (width < 40) return <Text color={tone(palette.primary, colorMode)} wrap="truncate-end">{snapshot.provider}/{snapshot.model} · {git}</Text>;
   return <Box borderStyle="single" borderColor={tone(palette.border, colorMode)} paddingX={1} width={Math.max(20, width)}><Text color={tone(palette.primary, colorMode)} wrap="truncate-end">{segments.join('  │  ')}</Text></Box>;
 }
 

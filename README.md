@@ -117,10 +117,10 @@ The following captures were generated from real isolated CLI and PTY runs. They 
 
 | Setup and runtime | Interactive UI |
 | --- | --- |
-| ![UTHARNESS setup output](docs/assets/screenshots/setup.png) | ![UTHARNESS wide terminal UI](docs/assets/screenshots/focus-120x36.png) |
+| ![UTHARNESS setup output](docs/assets/screenshots/setup.png) | ![UTHARNESS responsive banner at 120 columns](docs/assets/screenshots/banner-120x40.png) |
 | ![UTHARNESS chat output](docs/assets/screenshots/chat.png) | ![UTHARNESS command palette](docs/assets/screenshots/command-palette.png) |
-| ![UTHARNESS configuration](docs/assets/screenshots/configuration.png) | ![UTHARNESS narrow terminal UI](docs/assets/screenshots/focus-80x24.png) |
-| ![UTHARNESS diagnostics](docs/assets/screenshots/doctor.png) | ![UTHARNESS compact terminal UI](docs/assets/screenshots/focus-40x18.png) |
+| ![UTHARNESS configuration](docs/assets/screenshots/configuration.png) | ![UTHARNESS wrapped banner at 60 columns](docs/assets/screenshots/banner-60x24.png) |
+| ![UTHARNESS diagnostics](docs/assets/screenshots/doctor.png) | ![UTHARNESS minimal banner at 20 columns](docs/assets/screenshots/banner-20x12.png) |
 
 ### Interactive setup wizard
 
@@ -128,7 +128,7 @@ The following captures were generated from real isolated CLI and PTY runs. They 
 |---|---|---|
 | ![Utharness setup welcome](docs/assets/screenshots/setup-welcome.png) | ![Utharness provider selector](docs/assets/screenshots/setup-provider.png) | ![Utharness capability selector](docs/assets/screenshots/setup-tools.png) |
 
-The interactive capture set covers `40`, `60`, `80`, `120`, `160`, and `220` columns, including short-height layouts. The UI keeps its header, UTHARNESS banner, prompt, and status bar fixed while the conversation viewport changes with terminal size.
+The interactive capture matrix covers `20`, `30`, `40`, `60`, `80`, `100`, `120`, `160`, and `200` columns, including short-height layouts. The UI keeps its banner, prompt, and status bar fixed while the conversation viewport changes with terminal size.
 
 ## Capabilities
 
@@ -190,9 +190,11 @@ Live model setup, provider defaults, local endpoints, and the credential-safety 
 
 The interactive UI under [`ui/`](./ui) is a replacement for the former Rust TUI, not an additional disconnected mock. The Rust launcher starts `ui/dist/index.js` through Node 22 and falls back to `pnpm --dir ui dev` when a source checkout has not built the bundle. Set `UTHARNESS_UI_ENTRY` to use a custom bundle and `UTHARNESS_RUNTIME_BIN` to override the runtime executable used by the UI adapter.
 
-The design follows one shared left-aligned grid. The header and ASCII banner remain fixed on every display, including compact and short-height terminals. The conversation viewport contains UTHY/YOU rows, timestamps, streaming token updates, running and completed tool cards, success/error/approval states, and result summaries. The cyan prompt supports slash suggestions, `@file`, `@folder`, `@url`, `@agent`, `@skill`, and `@memory` references, plus command history.
+The design follows one shared left-aligned grid. The colored ASCII banner remains fixed on every display, including compact and short-height terminals. The conversation viewport contains UTHARNESS/YOU rows, timestamps, streaming token updates, running and completed tool cards, success/error/approval states, and result summaries. The cyan prompt supports slash suggestions, `@file`, `@folder`, `@url`, `@agent`, `@skill`, and `@memory` references, plus command history.
 
-The terminal breakpoints are `40–59` compact, `60–79` narrow, `80–119` standard, `120–199` wide, and `200+` ultra-wide. The palette selects TrueColor, ANSI 256, ANSI 16, or monochrome behavior from `COLORTERM`, `TERM`, `UTHARNESS_COLOR`, `UTHARNESS_ASCII`, and `NO_COLOR`. `SIGWINCH` redraws the UI on resize, PageUp/PageDown scroll the conversation, mouse-wheel escape sequences adjust the viewport, and `UTHARNESS_REDUCED_MOTION=1` reduces animation.
+Banner breakpoints are `<40` minimal, `40–59` compact, `60–89` wrapped, `90–119` compressed, and `120+` full. The palette selects TrueColor, ANSI 256, ANSI 16, or monochrome behavior from `COLORTERM`, `TERM`, `UTHARNESS_COLOR`, `UTHARNESS_ASCII`, and `NO_COLOR`. Terminal resize events redraw the fixed region without appending duplicate banners; PageUp/PageDown scroll the conversation, mouse-wheel escape sequences adjust the viewport, and `UTHARNESS_REDUCED_MOTION=1` reduces animation.
+
+Use `utharness --no-banner`, `utharness --banner=full`, `utharness --banner=compact`, or `utharness --banner=minimal` for a single run. Persistent settings use `utharness config set ui.banner true|false`, `utharness config set ui.banner_mode full|compact|minimal`, and `utharness config set ui.icons nerd|unicode|ascii`. Non-interactive and redirected CLI output omits the banner automatically.
 
 ## Installation
 
