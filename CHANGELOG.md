@@ -4,6 +4,12 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.16] — 2026-09-05
+
+### Added
+
+- Replaced the large CLI and persistent TUI wordmark with the six-row block-3D UTHARNESS banner, rendered as a left-to-right green-to-sky-blue ANSI gradient with 256-color, 16-color, and no-color fallbacks.
+
 ## [0.2.15] — 2026-08-31
 
 ### Fixed
