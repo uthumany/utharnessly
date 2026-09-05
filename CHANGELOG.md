@@ -4,6 +4,12 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.20] — 2026-09-05
+
+### Fixed
+
+- Kept the persistent Ink TUI banner in parity with the native CLI’s readable, spaced block wordmark.
+
 ## [0.2.19] — 2026-09-05
 
 ### Fixed

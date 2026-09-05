@@ -7,15 +7,14 @@ export type BannerTier = 'full' | 'compressed' | 'wrapped' | 'compact' | 'minima
 
 export const letterColors = ['#B44CFF', '#20D6F4', '#55DB24', '#FFD21F', '#FF8A16', '#FF3D4F', '#3478F6', '#B44CFF', '#B44CFF'] as const;
 export const bannerGradient = { start: '#22C55E', end: '#38BDF8' } as const;
-// Supplied block-3D UTHARNESS wordmark. It is exactly 76 terminal cells wide,
-// which lets the compressed tier render at the 90-column breakpoint.
+// Spaced block glyphs stay readable in bitmap and tight-line-height terminals.
+// The wordmark is 62 terminal cells wide, leaving a visible gutter between letters.
 const blockWordmark = [
-  '██╗   ██╗████████╗██╗  ██╗ █████╗ ██████╗ ███╗   ██╗███████╗███████╗███████╗',
-  '██║   ██║╚══██╔══╝██║  ██║██╔══██╗██╔══██╗████╗  ██║██╔════╝██╔════╝██╔════╝',
-  '██║   ██║   ██║   ███████║███████║██████╔╝██╔██╗ ██║█████╗  ███████╗███████╗',
-  '██║   ██║   ██║   ██╔══██║██╔══██║██╔══██╗██║╚██╗██║██╔══╝  ╚════██║╚════██║',
-  '╚██████╔╝   ██║   ██║  ██║██║  ██║██║  ██║██║ ╚████║███████╗███████╗███████╗',
-  ' ╚═════╝    ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝╚══════╝'
+  '██  ██ ██████ ██  ██  ████  █████  ██  ██ ██████  █████  █████',
+  '██  ██   ██   ██  ██ ██  ██ ██  ██ ███ ██ ██     ██     ██    ',
+  '██  ██   ██   ██████ ██████ █████  ██████ █████   ████   ████ ',
+  '██  ██   ██   ██  ██ ██  ██ ██ ██  ██ ███ ██         ██     ██',
+  ' ████    ██   ██  ██ ██  ██ ██  ██ ██  ██ ██████ █████  █████ '
 ] as const;
 const glyphs: Record<string, string[]> = {
   U: ['█ █', '█ █', '█ █', '█ █', '███'], T: ['███', ' █ ', ' █ ', ' █ ', ' █ '],
@@ -45,7 +44,7 @@ export function bannerTier(width: number, rows: number, mode: BannerMode = 'full
 }
 
 export function bannerHeight(tier: BannerTier): number {
-  return ({ full: 10, compressed: 10, wrapped: 10, compact: 4, minimal: 2, hide: 0 })[tier];
+  return ({ full: 9, compressed: 9, wrapped: 10, compact: 4, minimal: 2, hide: 0 })[tier];
 }
 
 const iconSets: Record<IconMode, Record<string, string>> = {
@@ -90,7 +89,7 @@ function TerminalBlock({ colorMode }: { colorMode: ColorMode }) {
   const purple = tone(letterColors[0], colorMode); const green = tone(letterColors[2], colorMode);
   return <Box flexDirection="column" marginRight={2}>
     <Text color={purple}>╔══════════╗</Text><Text color={purple}>║          ║</Text>
-    <Text color={purple}>║ <Text color={green} bold>&gt;_</Text>       ║</Text><Text color={purple}>║          ║</Text><Text color={purple}>║          ║</Text><Text color={purple}>╚══════════╝</Text>
+    <Text color={purple}>║ <Text color={green} bold>&gt;_</Text>       ║</Text><Text color={purple}>║          ║</Text><Text color={purple}>╚══════════╝</Text>
   </Box>;
 }
 
@@ -108,8 +107,8 @@ export function ResponsiveBanner({ width, rows, mode, colorMode, iconMode }: { w
   if (tier === 'minimal') return <Box justifyContent="space-between"><Text bold>{word.map((letter, index) => <Text key={`${letter}-${index}`} color={tone(letterColors[index]!, colorMode)}>{letter}</Text>)} <Text color={tone(letterColors[2], colorMode)}>&gt;_</Text></Text><Text dimColor>F1 help</Text></Box>;
   if (tier === 'compact') return <Box flexDirection="column"><Text color={tone(letterColors[0], colorMode)}>┌─ <Text bold>UTHARNESS</Text> &gt;_ ─┐</Text><StatusBlocks tier={tier} colorMode={colorMode} icons={icons} /><Text dimColor>AUTONOMOUS AGENT HARNESS</Text></Box>;
   // These are the actual visual widths, rather than an arbitrary wider rule:
-  // full = 12-cell terminal + 2-cell gutter + 76-cell wordmark.
-  const separatorWidth = tier === 'full' ? 90 : tier === 'compressed' ? 76 : Math.max(20, Math.min(width - 2, 58));
+  // full = 12-cell terminal + 2-cell gutter + 62-cell wordmark.
+  const separatorWidth = tier === 'full' ? 76 : tier === 'compressed' ? 62 : Math.max(20, Math.min(width - 2, 58));
   const separator = '╌'.repeat(separatorWidth);
   return <Box flexDirection="column" width={width} alignItems="center">
     <Text dimColor>{separator}</Text>
