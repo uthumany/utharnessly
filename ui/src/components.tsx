@@ -26,8 +26,8 @@ export function ToolCardView({ tool, width, colorMode, tick = 0 }: { tool: ToolC
 }
 
 const roleMeta = (role: Message['role']) => ({
-  utharness: ['UTHARNESS', palette.agent, '◉'], you: ['YOU', palette.primary, '○'], system: ['SYSTEM', palette.warning, '!'],
-  agent: ['AGENT', palette.agent, '◆'], tool: ['TOOL', palette.tool, '⚙'], memory: ['MEMORY', palette.accent, '◫'], error: ['ERROR', palette.error, '✗']
+  utharness: ['UTHARNESS', palette.agent, '𓄆'], you: ['YOU', palette.primary, '○'], system: ['SYSTEM', palette.warning, '!'],
+  agent: ['AGENT', palette.error, '𓄆'], tool: ['TOOL', palette.tool, '⚙'], memory: ['MEMORY', palette.accent, '◫'], error: ['ERROR', palette.error, '✗']
 } as const)[role];
 export function MessageRow({ message, width, colorMode, tick }: { message: Message; width: number; colorMode: ColorMode; tick: number }) {
   const [name, color, marker] = roleMeta(message.role);
@@ -54,5 +54,5 @@ export function Inspector({ snapshot, colorMode, width }: { snapshot: RuntimeSna
 
 export function Overlay({ kind, items, selected, query, width, colorMode }: { kind: Exclude<OverlayKind, null>; items: PaletteItem[]; selected: number; query: string; width: number; colorMode: ColorMode }) {
   const title = kind.toUpperCase();
-  return <Box borderStyle="round" borderColor={tone(palette.accent, colorMode)} paddingX={1} width={Math.max(28, Math.min(width, 78))} flexDirection="column"><Box justifyContent="space-between"><Text color={tone(palette.accent, colorMode)} bold>{title}</Text><Text color={tone(palette.muted, colorMode)}>Esc close</Text></Box>{query ? <Text color={tone(palette.primary, colorMode)}>⌕ {query}</Text> : null}{items.slice(0, 12).map((item, index) => <Box key={item.id} justifyContent="space-between"><Text color={tone(index === selected ? palette.borderFocus : palette.text, colorMode)}>{index === selected ? '› ' : '  '}{item.label}  <Text color={tone(palette.muted, colorMode)}>{item.description}</Text></Text><Text color={tone(palette.muted, colorMode)}>{item.shortcut ?? ''}</Text></Box>)}{items.length === 0 ? <Text color={tone(palette.muted, colorMode)}>No matching items</Text> : null}<Text color={tone(palette.muted, colorMode)}>↑/↓ select · Enter open · Esc close</Text></Box>;
+  return <Box borderStyle="round" borderColor={tone(palette.accent, colorMode)} paddingX={1} width={Math.max(28, Math.min(width, 78))} flexDirection="column"><Box justifyContent="space-between"><Text color={tone(palette.accent, colorMode)} bold>{title}</Text><Text color={tone(palette.muted, colorMode)}>Esc close</Text></Box>{query ? <Text color={tone(palette.primary, colorMode)}>⌕ {query}</Text> : null}{items.slice(0, 12).map((item, index) => <Box key={item.id} justifyContent="space-between"><Text color={tone(index === selected ? palette.borderFocus : palette.text, colorMode)}>{index === selected ? <Text color={tone(palette.warning, colorMode)}>𓆃 </Text> : '  '}{item.label}  <Text color={tone(palette.muted, colorMode)}>{item.description}</Text></Text><Text color={tone(palette.muted, colorMode)}>{item.shortcut ?? ''}</Text></Box>)}{items.length === 0 ? <Text color={tone(palette.muted, colorMode)}>No matching items</Text> : null}<Text color={tone(palette.muted, colorMode)}>↑/↓ select · Enter open · Esc close</Text></Box>;
 }

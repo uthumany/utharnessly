@@ -2,6 +2,16 @@ use crossterm::terminal;
 use std::io::{self, IsTerminal, Write};
 
 const WORD: &str = "UTHARNESS";
+/// Exact 76-cell, six-row desktop art from `utharness-ascii.html`. Together
+/// with `║ ` and ` ║`, each framed row is exactly 80 terminal cells wide.
+const FRAMED_WORDMARK: [&str; 6] = [
+    "██╗   ██╗████████╗██╗  ██╗ █████╗ ██████╗ ███╗   ██╗███████╗███████╗███████╗",
+    "██║   ██║╚══██╔══╝██║  ██║██╔══██╗██╔══██╗████╗  ██║██╔════╝██╔════╝██╔════╝",
+    "██║   ██║   ██║   ███████║███████║██████╔╝██╔██╗ ██║█████╗  ███████╗███████╗",
+    "██║   ██║   ██║   ██╔══██║██╔══██║██╔══██╗██║╚██╗██║██╔══╝  ╚════██║╚════██║",
+    "╚██████╔╝   ██║   ██║  ██║██║  ██║██║  ██║██║ ╚████║███████╗███████╗███████╗",
+    " ╚═════╝    ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝╚══════╝",
+];
 /// A 62-cell, spaced block alphabet remains readable in small terminal cells.
 /// The earlier dense 76-cell glyph set made neighbouring letters visually merge
 /// in terminals with tight line height or bitmap-style fonts.
@@ -39,7 +49,6 @@ const GLYPHS: [[&str; 3]; 8] = [
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BannerLayout {
     Full,
-    Compressed,
     Wrapped,
     Compact,
     Minimal,
@@ -92,10 +101,8 @@ pub fn layout_for_width(width: u16, preference: BannerPreference) -> BannerLayou
     if width < 60 || preference == BannerPreference::Compact {
         return BannerLayout::Compact;
     }
-    if width < 90 {
+    if width < 80 {
         BannerLayout::Wrapped
-    } else if width < 120 {
-        BannerLayout::Compressed
     } else {
         BannerLayout::Full
     }
@@ -241,34 +248,6 @@ fn icons(ascii: bool) -> [&'static str; 7] {
     }
 }
 
-fn terminal_block_line(row: usize, depth: ColorDepth, ascii: bool) -> String {
-    let (top, side, bottom) = if ascii {
-        ("+----------+", "|", "+----------+")
-    } else {
-        ("╔══════════╗", "║", "╚══════════╝")
-    };
-    match row {
-        0 => paint(top, 0, depth),
-        2 => format!(
-            "{}{} {}>_{}      {}{}",
-            start_color(0, depth),
-            side,
-            start_color(2, depth),
-            start_color(0, depth),
-            side,
-            reset(depth)
-        ),
-        4 => paint(bottom, 0, depth),
-        _ => format!(
-            "{}{}          {}{}",
-            start_color(0, depth),
-            side,
-            side,
-            reset(depth)
-        ),
-    }
-}
-
 pub fn render_banner(width: u16, version: &str, ansi: bool) -> String {
     render_banner_with(width, version, ansi, BannerPreference::from_environment())
 }
@@ -301,32 +280,38 @@ pub fn render_banner_with(
             lines.push("[A] [M] [S] [C] [D] [T] >_".into());
             lines.push("AUTONOMOUS AGENT HARNESS".into());
         }
-        BannerLayout::Wrapped | BannerLayout::Compressed | BannerLayout::Full => {
-            // Keep borders and wordmark on one centered visual grid. The full
-            // tier is 12-cell prompt block + two-cell gutter + 62-cell art.
-            let content_width = match layout {
-                BannerLayout::Full => 76,
-                BannerLayout::Compressed => 62,
-                BannerLayout::Wrapped => usize::min(width.saturating_sub(2) as usize, 58),
-                _ => unreachable!(),
-            };
-            lines.push(centered_line("-".repeat(content_width), width));
-            for (row, block_line) in BLOCK_WORDMARK.iter().enumerate() {
-                let wordmark = if layout == BannerLayout::Wrapped {
-                    // A 3-row fallback remains the only safely readable option
-                    // below 90 columns.
-                    art_line(row / 2, depth, false)
-                } else {
-                    gradient_wordmark_line(block_line, depth)
+        BannerLayout::Wrapped | BannerLayout::Full => {
+            if layout == BannerLayout::Full {
+                let top = format!("╔{}╗", "═".repeat(78));
+                lines.push(centered_line(gradient_wordmark_line(&top, depth), width));
+                for line in FRAMED_WORDMARK {
+                    let framed = format!("║ {line} ║");
+                    lines.push(centered_line(gradient_wordmark_line(&framed, depth), width));
+                }
+                let bottom = format!("╚{}╝", "═".repeat(78));
+                lines.push(centered_line(gradient_wordmark_line(&bottom, depth), width));
+            } else {
+                // Keep borders and wordmark on one centered visual grid. The full
+                // frame is only used when it fits; compact art is the mobile-safe
+                // fallback when a terminal cannot scale its font like CSS can.
+                let content_width = match layout {
+                    BannerLayout::Wrapped => usize::min(width.saturating_sub(2) as usize, 58),
+                    _ => unreachable!(),
                 };
-                let composed = if layout == BannerLayout::Full {
-                    format!("{}  {wordmark}", terminal_block_line(row, depth, ascii))
-                } else {
-                    wordmark
-                };
-                lines.push(centered_line(composed, width));
+                lines.push(centered_line("-".repeat(content_width), width));
+                for (row, block_line) in BLOCK_WORDMARK.iter().enumerate() {
+                    let wordmark = if layout == BannerLayout::Wrapped {
+                        // A 3-row fallback remains the only safely readable option
+                        // below 90 columns.
+                        art_line(row / 2, depth, false)
+                    } else {
+                        gradient_wordmark_line(block_line, depth)
+                    };
+                    let composed = wordmark;
+                    lines.push(centered_line(composed, width));
+                }
+                lines.push(centered_line("-".repeat(content_width), width));
             }
-            lines.push(centered_line("-".repeat(content_width), width));
             let names = [
                 "AGENTS", "MODELS", "SKILLS", "MCP", "MEMORY", "TOOLS", "TERMINAL",
             ];
@@ -378,7 +363,7 @@ pub fn print_startup_banner(version: &str) -> anyhow::Result<()> {
 mod tests {
     use super::*;
     fn plain(w: u16) -> String {
-        render_banner_with(w, "0.2.20", false, BannerPreference::Full)
+        render_banner_with(w, "0.2.21", false, BannerPreference::Full)
     }
     #[test]
     fn maps_required_widths() {
@@ -390,8 +375,8 @@ mod tests {
                 BannerLayout::Minimal,
                 BannerLayout::Compact,
                 BannerLayout::Wrapped,
-                BannerLayout::Wrapped,
-                BannerLayout::Compressed,
+                BannerLayout::Full,
+                BannerLayout::Full,
                 BannerLayout::Full,
                 BannerLayout::Full,
                 BannerLayout::Full
@@ -423,9 +408,13 @@ mod tests {
     }
     #[test]
     fn block_wordmark_uses_requested_geometry() {
+        assert_eq!(FRAMED_WORDMARK.len(), 6);
+        assert!(FRAMED_WORDMARK
+            .iter()
+            .all(|line| line.chars().count() == 76));
         assert_eq!(BLOCK_WORDMARK.len(), 5);
         assert!(BLOCK_WORDMARK.iter().all(|line| line.chars().count() == 62));
-        assert!(plain(90).contains(BLOCK_WORDMARK[0]));
+        assert!(plain(80).contains(FRAMED_WORDMARK[0]));
     }
     #[test]
     fn full_banner_uses_one_centered_visual_grid() {
@@ -433,11 +422,11 @@ mod tests {
         let lines = rendered.lines().collect::<Vec<_>>();
         let separator = lines[0];
         let wordmark = lines[1];
-        assert_eq!(visible_width(separator), 98);
-        assert_eq!(separator.trim_start().chars().count(), 76);
-        assert_eq!(separator.chars().take_while(|c| *c == ' ').count(), 22);
-        assert_eq!(wordmark.chars().take_while(|c| *c == ' ').count(), 22);
-        assert_eq!(visible_width(wordmark), 98);
+        assert_eq!(visible_width(separator), 100);
+        assert_eq!(separator.trim_start().chars().count(), 80);
+        assert_eq!(separator.chars().take_while(|c| *c == ' ').count(), 20);
+        assert_eq!(wordmark.chars().take_while(|c| *c == ' ').count(), 20);
+        assert_eq!(visible_width(wordmark), 100);
     }
     #[test]
     fn truecolor_wordmark_uses_green_to_sky_gradient() {

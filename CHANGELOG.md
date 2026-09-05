@@ -4,6 +4,12 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.21] — 2026-09-05
+
+### Added
+
+- Implemented the exact HTML-derived 80×8 framed desktop banner, a non-clipping compact terminal fallback, yellow `𓆃` selectors, red `𓄆` agent markers, and sky-blue/yellow 1–100% response preparation progress.
+
 ## [0.2.20] — 2026-09-05
 
 ### Fixed

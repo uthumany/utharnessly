@@ -159,6 +159,7 @@ export function App() {
     setHistoryIndex(-1);
     const userMessage: Message = { id: `${Date.now()}-user`, role: 'you', text: prompt, time: now() };
     setMessages(current => unique([...current, userMessage]));
+    setTick(0);
     setStreaming(true);
     void submitPrompt(prompt).then(response => {
       const id = `${Date.now()}-assistant`;
@@ -200,7 +201,9 @@ export function App() {
 
   const visibleMessages = messages.slice(Math.max(0, messages.length - visibleCount - scrollOffset), messages.length - scrollOffset || undefined);
   const chatWidth = mode === 'workspace' ? workspaceWidths(columns).chat : contentWidth;
-  const chat = <Box flexDirection="column" width={chatWidth} height={chatHeight} overflow="hidden" paddingX={mode === 'workspace' ? 1 : 0}>{runtimeError ? <Text color={tone(palette.error, colorMode)}>Runtime: {runtimeError}</Text> : null}{visibleMessages.map(message => <MessageRow key={message.id} message={message} width={mode === 'workspace' ? chatWidth - 3 : chatWidth} colorMode={colorMode} tick={tick} />)}{streaming ? <Text color={tone(palette.primary, colorMode)}>  {ui.reducedMotion ? '◆' : '◐'} UTHARNESS is working…</Text> : null}</Box>;
+  const loadingPercent = ui.reducedMotion ? 100 : Math.min(100, tick + 1);
+  const loadingCells = Math.ceil(loadingPercent / 10);
+  const chat = <Box flexDirection="column" width={chatWidth} height={chatHeight} overflow="hidden" paddingX={mode === 'workspace' ? 1 : 0}>{runtimeError ? <Text color={tone(palette.error, colorMode)}>Runtime: {runtimeError}</Text> : null}{visibleMessages.map(message => <MessageRow key={message.id} message={message} width={mode === 'workspace' ? chatWidth - 3 : chatWidth} colorMode={colorMode} tick={tick} />)}{streaming ? <Text color={tone(palette.primary, colorMode)}>  <Text color={tone(palette.error, colorMode)}>𓄆</Text> AGENT preparing response <Text color={tone(palette.warning, colorMode)}>{'█'.repeat(loadingCells)}</Text><Text color={tone(palette.primary, colorMode)}>{'▒'.repeat(10 - loadingCells)}</Text> <Text color={tone(palette.warning, colorMode)}>{loadingPercent}%</Text></Text> : null}</Box>;
 
   return <Box flexDirection="column" width="100%" height={rows} paddingX={compact ? 0 : 1}>
     <PersistentHeader width={columns} rows={rows} mode={ui.bannerMode} colorMode={colorMode} iconMode={ui.iconMode} />

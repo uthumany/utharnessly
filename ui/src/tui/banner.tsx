@@ -7,6 +7,14 @@ export type BannerTier = 'full' | 'compressed' | 'wrapped' | 'compact' | 'minima
 
 export const letterColors = ['#B44CFF', '#20D6F4', '#55DB24', '#FFD21F', '#FF8A16', '#FF3D4F', '#3478F6', '#B44CFF', '#B44CFF'] as const;
 export const bannerGradient = { start: '#22C55E', end: '#38BDF8' } as const;
+const framedWordmark = [
+  '██╗   ██╗████████╗██╗  ██╗ █████╗ ██████╗ ███╗   ██╗███████╗███████╗███████╗',
+  '██║   ██║╚══██╔══╝██║  ██║██╔══██╗██╔══██╗████╗  ██║██╔════╝██╔════╝██╔════╝',
+  '██║   ██║   ██║   ███████║███████║██████╔╝██╔██╗ ██║█████╗  ███████╗███████╗',
+  '██║   ██║   ██║   ██╔══██║██╔══██║██╔══██╗██║╚██╗██║██╔══╝  ╚════██║╚════██║',
+  '╚██████╔╝   ██║   ██║  ██║██║  ██║██║  ██║██║ ╚████║███████╗███████╗███████╗',
+  ' ╚═════╝    ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝╚══════╝'
+] as const;
 // Spaced block glyphs stay readable in bitmap and tight-line-height terminals.
 // The wordmark is 62 terminal cells wide, leaving a visible gutter between letters.
 const blockWordmark = [
@@ -38,18 +46,17 @@ export function bannerTier(width: number, rows: number, mode: BannerMode = 'full
   if (width < 40 || rows < 12) return 'minimal';
   if (mode === 'minimal') return 'minimal';
   if (mode === 'compact' || width < 60 || rows < 18) return 'compact';
-  if (width < 90 || rows < 24) return 'wrapped';
-  if (width < 120 || rows < 30) return 'compressed';
+  if (width < 80 || rows < 24) return 'wrapped';
   return 'full';
 }
 
 export function bannerHeight(tier: BannerTier): number {
-  return ({ full: 9, compressed: 9, wrapped: 10, compact: 4, minimal: 2, hide: 0 })[tier];
+  return ({ full: 10, compressed: 9, wrapped: 9, compact: 4, minimal: 2, hide: 0 })[tier];
 }
 
 const iconSets: Record<IconMode, Record<string, string>> = {
   nerd: { agents: '󰚩', models: '󰆧', skills: '', mcp: '󰘬', memory: '', tools: '󰒓', terminal: '' },
-  unicode: { agents: '◉', models: '◇', skills: '</>', mcp: '⎇', memory: '▤', tools: '⚒', terminal: '>_' },
+  unicode: { agents: '𓄆', models: '◇', skills: '</>', mcp: '⎇', memory: '▤', tools: '⚒', terminal: '>_' },
   ascii: { agents: '[A]', models: '[M]', skills: '[S]', mcp: '[C]', memory: '[D]', tools: '[T]', terminal: '>_' }
 };
 
@@ -85,6 +92,15 @@ function BlockWordmark({ colorMode }: { colorMode: ColorMode }) {
   ))}</Text>)}</Box>;
 }
 
+function GradientLine({ text, colorMode }: { text: string; colorMode: ColorMode }) {
+  return <Text bold>{[...text].map((character, column) => <Text key={column} color={tone(interpolateGradient(column, text.length), colorMode)}>{character}</Text>)}</Text>;
+}
+function FramedWordmark({ colorMode }: { colorMode: ColorMode }) {
+  return <Box flexDirection="column"><GradientLine text={`╔${'═'.repeat(78)}╗`} colorMode={colorMode} />
+    {framedWordmark.map((line, row) => <GradientLine key={row} text={`║ ${line} ║`} colorMode={colorMode} />)}
+    <GradientLine text={`╚${'═'.repeat(78)}╝`} colorMode={colorMode} /></Box>;
+}
+
 function TerminalBlock({ colorMode }: { colorMode: ColorMode }) {
   const purple = tone(letterColors[0], colorMode); const green = tone(letterColors[2], colorMode);
   return <Box flexDirection="column" marginRight={2}>
@@ -106,14 +122,8 @@ export function ResponsiveBanner({ width, rows, mode, colorMode, iconMode }: { w
   const icons = resolveIconMode(iconMode);
   if (tier === 'minimal') return <Box justifyContent="space-between"><Text bold>{word.map((letter, index) => <Text key={`${letter}-${index}`} color={tone(letterColors[index]!, colorMode)}>{letter}</Text>)} <Text color={tone(letterColors[2], colorMode)}>&gt;_</Text></Text><Text dimColor>F1 help</Text></Box>;
   if (tier === 'compact') return <Box flexDirection="column"><Text color={tone(letterColors[0], colorMode)}>┌─ <Text bold>UTHARNESS</Text> &gt;_ ─┐</Text><StatusBlocks tier={tier} colorMode={colorMode} icons={icons} /><Text dimColor>AUTONOMOUS AGENT HARNESS</Text></Box>;
-  // These are the actual visual widths, rather than an arbitrary wider rule:
-  // full = 12-cell terminal + 2-cell gutter + 62-cell wordmark.
-  const separatorWidth = tier === 'full' ? 76 : tier === 'compressed' ? 62 : Math.max(20, Math.min(width - 2, 58));
-  const separator = '╌'.repeat(separatorWidth);
   return <Box flexDirection="column" width={width} alignItems="center">
-    <Text dimColor>{separator}</Text>
-    <Box>{tier === 'full' ? <TerminalBlock colorMode={colorMode} /> : null}{tier === 'wrapped' ? <Wordmark rows={[0, 1, 2, 3, 4]} colorMode={colorMode} /> : <BlockWordmark colorMode={colorMode} />}</Box>
-    <Text dimColor>{separator}</Text>
+    {tier === 'full' ? <FramedWordmark colorMode={colorMode} /> : <><Text dimColor>{'╌'.repeat(Math.max(20, Math.min(width - 2, 58)))}</Text><BlockWordmark colorMode={colorMode} /><Text dimColor>{'╌'.repeat(Math.max(20, Math.min(width - 2, 58)))}</Text></>}
     <StatusBlocks tier={tier} colorMode={colorMode} icons={icons} />
     <Text color={tone(letterColors[2], colorMode)} bold>&gt; <Text color={tone('#E8EDF3', colorMode)}>AUTONOMOUS AI AGENT TERMINAL HARNESS</Text> &lt;</Text>
   </Box>;

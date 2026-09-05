@@ -8,6 +8,8 @@ use std::{
     io::{self, IsTerminal},
     path::{Path, PathBuf},
     process::Command,
+    thread,
+    time::Duration,
 };
 use utharness_core::MessageRole;
 use utharness_provider::{
@@ -660,7 +662,8 @@ fn chat(args: ChatArgs) -> Result<()> {
     let response = match Gateway::from_environment() {
         Ok(provider) => {
             live = true;
-            println!("Uthy · {}/{}", provider.provider(), provider.model());
+            println!("𓄆 Uthy · {}/{}", provider.provider(), provider.model());
+            print_agent_loading()?;
             use std::io::Write;
             io::stdout().flush()?;
             let response = provider.complete_streaming(
@@ -684,8 +687,32 @@ fn chat(args: ChatArgs) -> Result<()> {
         utharness_core::new_id(),
     )?;
     if !live {
-        println!("Uthy · OFFLINE PLANNER\n{}", response);
+        println!("𓄆 Uthy · OFFLINE PLANNER\n{}", response);
     }
+    Ok(())
+}
+
+/// Brief, terminal-safe pre-response progress for interactive live chats. It
+/// uses a carriage-returned single line, never polluting redirected output.
+fn print_agent_loading() -> Result<()> {
+    if !io::stdout().is_terminal() {
+        return Ok(());
+    }
+    use std::io::Write;
+    let colored =
+        env::var_os("NO_COLOR").is_none() && env::var("TERM").is_ok_and(|term| term != "dumb");
+    for (percent, filled) in [(1, 0), (10, 1), (30, 3), (50, 5), (80, 8), (100, 10)] {
+        let bar = format!("{}{}", "█".repeat(filled), "▒".repeat(10 - filled));
+        if colored {
+            print!("\r\x1b[2K\x1b[38;2;56;189;248m𓄆 AGENT preparing response \x1b[38;2;250;204;21m{bar} {percent}%\x1b[0m");
+        } else {
+            print!("\rAGENT preparing response {bar} {percent}%");
+        }
+        io::stdout().flush()?;
+        thread::sleep(Duration::from_millis(100));
+    }
+    print!("\r\x1b[2K");
+    io::stdout().flush()?;
     Ok(())
 }
 
@@ -1319,7 +1346,7 @@ fn agents(action: AgentAction) -> Result<()> {
     match action {
         AgentAction::List => {
             println!("AGENT RUNTIME");
-            println!("● Uthy       planner/executor   READY");
+            println!("𓄆 Uthy       planner/executor   READY");
             println!("  tools      list_directory read_file git_status git_diff");
             println!("  policy     SAFE read-only; every tool request is evaluated and persisted");
             println!("Run: utharness agents run \"Inspect this repository\"");

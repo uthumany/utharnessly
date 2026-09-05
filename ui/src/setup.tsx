@@ -17,7 +17,7 @@ export function parseModelCatalog(raw: string): ModelCatalog {
 }
 
 function List({ items, selected, marked }: { items: Array<{ id: string; label: string; description: string }>; selected: number; marked?: Set<string> }) {
-  return <Box flexDirection="column">{items.map((item, index) => <Text key={item.id} color={index === selected ? cyan : undefined} wrap="truncate-end">{index === selected ? '› ' : '  '}{marked ? `[${marked.has(item.id) ? '●' : ' '}]` : `${index + 1}.`} <Text bold={index === selected}>{item.label}</Text> <Text color={muted}>— {item.description}</Text></Text>)}</Box>;
+  return <Box flexDirection="column">{items.map((item, index) => <Text key={item.id} color={index === selected ? cyan : undefined} wrap="truncate-end">{index === selected ? <Text color={yellow}>𓆃 </Text> : '  '}{marked ? `[${marked.has(item.id) ? '●' : ' '}]` : `${index + 1}.`} <Text bold={index === selected}>{item.label}</Text> <Text color={muted}>— {item.description}</Text></Text>)}</Box>;
 }
 function Progress({ completed, total, label }: { completed: number; total: number; label: string }) {
   const value = progress(completed, total), filled = Math.round(value / 10);
