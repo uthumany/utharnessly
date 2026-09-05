@@ -4,6 +4,12 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.19] — 2026-09-05
+
+### Fixed
+
+- Replaced the dense six-row banner glyphs with a spaced five-row block alphabet so every UTHARNESS letter remains fully visible and readable in compact terminal fonts and tight line-height environments.
+
 ## [0.2.18] — 2026-09-05
 
 ### Fixed
