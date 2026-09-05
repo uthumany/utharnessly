@@ -4,6 +4,12 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.17] — 2026-09-05
+
+### Fixed
+
+- Centered the CLI and persistent TUI banner on the actual 90-cell full and 76-cell compressed visual grids, aligning the separators, terminal prompt block, wordmark, navigation, and tagline.
+
 ## [0.2.16] — 2026-09-05
 
 ### Added

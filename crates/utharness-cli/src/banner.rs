@@ -378,7 +378,7 @@ pub fn print_startup_banner(version: &str) -> anyhow::Result<()> {
 mod tests {
     use super::*;
     fn plain(w: u16) -> String {
-        render_banner_with(w, "0.2.16", false, BannerPreference::Full)
+        render_banner_with(w, "0.2.17", false, BannerPreference::Full)
     }
     #[test]
     fn maps_required_widths() {
