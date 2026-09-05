@@ -107,8 +107,11 @@ export function ResponsiveBanner({ width, rows, mode, colorMode, iconMode }: { w
   const icons = resolveIconMode(iconMode);
   if (tier === 'minimal') return <Box justifyContent="space-between"><Text bold>{word.map((letter, index) => <Text key={`${letter}-${index}`} color={tone(letterColors[index]!, colorMode)}>{letter}</Text>)} <Text color={tone(letterColors[2], colorMode)}>&gt;_</Text></Text><Text dimColor>F1 help</Text></Box>;
   if (tier === 'compact') return <Box flexDirection="column"><Text color={tone(letterColors[0], colorMode)}>┌─ <Text bold>UTHARNESS</Text> &gt;_ ─┐</Text><StatusBlocks tier={tier} colorMode={colorMode} icons={icons} /><Text dimColor>AUTONOMOUS AGENT HARNESS</Text></Box>;
-  const separator = '╌'.repeat(Math.max(20, Math.min(width - 2, tier === 'full' ? 104 : 82)));
-  return <Box flexDirection="column">
+  // These are the actual visual widths, rather than an arbitrary wider rule:
+  // full = 12-cell terminal + 2-cell gutter + 76-cell wordmark.
+  const separatorWidth = tier === 'full' ? 90 : tier === 'compressed' ? 76 : Math.max(20, Math.min(width - 2, 58));
+  const separator = '╌'.repeat(separatorWidth);
+  return <Box flexDirection="column" width={width} alignItems="center">
     <Text dimColor>{separator}</Text>
     <Box>{tier === 'full' ? <TerminalBlock colorMode={colorMode} /> : null}{tier === 'wrapped' ? <Wordmark rows={[0, 1, 2, 3, 4]} colorMode={colorMode} /> : <BlockWordmark colorMode={colorMode} />}</Box>
     <Text dimColor>{separator}</Text>

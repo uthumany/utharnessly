@@ -180,6 +180,29 @@ fn gradient_wordmark_line(line: &str, depth: ColorDepth) -> String {
     output.push_str(reset(depth));
     output
 }
+/// ANSI escape sequences have no terminal-cell width. This intentionally small
+/// parser covers CSI SGR sequences emitted by the banner renderer.
+fn visible_width(value: &str) -> usize {
+    let mut characters = value.chars().peekable();
+    let mut width = 0;
+    while let Some(character) = characters.next() {
+        if character == '\x1b' && characters.peek() == Some(&'[') {
+            characters.next();
+            while let Some(next) = characters.next() {
+                if next.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        } else {
+            width += 1;
+        }
+    }
+    width
+}
+fn centered_line(value: String, terminal_width: u16) -> String {
+    let indent = (terminal_width as usize).saturating_sub(visible_width(&value)) / 2;
+    format!("{}{}", " ".repeat(indent), value)
+}
 fn colored_word(depth: ColorDepth) -> String {
     WORD.chars()
         .enumerate()
@@ -279,15 +302,15 @@ pub fn render_banner_with(
             lines.push("AUTONOMOUS AGENT HARNESS".into());
         }
         BannerLayout::Wrapped | BannerLayout::Compressed | BannerLayout::Full => {
-            let n = usize::min(
-                width.saturating_sub(2) as usize,
-                if layout == BannerLayout::Full {
-                    104
-                } else {
-                    82
-                },
-            );
-            lines.push("-".repeat(n));
+            // Keep borders and wordmark on one centered visual grid. The full
+            // tier is 12-cell prompt block + two-cell gutter + 76-cell art.
+            let content_width = match layout {
+                BannerLayout::Full => 90,
+                BannerLayout::Compressed => 76,
+                BannerLayout::Wrapped => usize::min(width.saturating_sub(2) as usize, 58),
+                _ => unreachable!(),
+            };
+            lines.push(centered_line("-".repeat(content_width), width));
             for row in 0..6 {
                 let wordmark = if layout == BannerLayout::Wrapped {
                     // A 3-row fallback remains the only safely readable option
@@ -296,13 +319,14 @@ pub fn render_banner_with(
                 } else {
                     gradient_wordmark_line(BLOCK_WORDMARK[row], depth)
                 };
-                lines.push(if layout == BannerLayout::Full {
+                let composed = if layout == BannerLayout::Full {
                     format!("{}  {wordmark}", terminal_block_line(row, depth, ascii))
                 } else {
                     wordmark
-                });
+                };
+                lines.push(centered_line(composed, width));
             }
-            lines.push("-".repeat(n));
+            lines.push(centered_line("-".repeat(content_width), width));
             let names = [
                 "AGENTS", "MODELS", "SKILLS", "MCP", "MEMORY", "TOOLS", "TERMINAL",
             ];
@@ -313,15 +337,18 @@ pub fn render_banner_with(
                 .map(|(i, name)| paint(&format!("{} {name}", glyphs[i]), i, depth))
                 .collect::<Vec<_>>();
             if layout == BannerLayout::Wrapped {
-                lines.push(blocks[..4].join("  "));
-                lines.push(blocks[4..].join("  "));
+                lines.push(centered_line(blocks[..4].join("  "), width));
+                lines.push(centered_line(blocks[4..].join("  "), width));
             } else {
-                lines.push(blocks.join("  "));
+                lines.push(centered_line(blocks.join("  "), width));
             }
-            lines.push(format!(
-                "{} AUTONOMOUS AI AGENT TERMINAL HARNESS {} v{version}",
-                paint(">", 2, depth),
-                paint("<", 2, depth)
+            lines.push(centered_line(
+                format!(
+                    "{} AUTONOMOUS AI AGENT TERMINAL HARNESS {} v{version}",
+                    paint(">", 2, depth),
+                    paint("<", 2, depth)
+                ),
+                width,
             ));
         }
         BannerLayout::Hidden => {}
@@ -399,6 +426,18 @@ mod tests {
         assert_eq!(BLOCK_WORDMARK.len(), 6);
         assert!(BLOCK_WORDMARK.iter().all(|line| line.chars().count() == 76));
         assert!(plain(90).contains(BLOCK_WORDMARK[0]));
+    }
+    #[test]
+    fn full_banner_uses_one_centered_visual_grid() {
+        let rendered = plain(120);
+        let lines = rendered.lines().collect::<Vec<_>>();
+        let separator = lines[0];
+        let wordmark = lines[1];
+        assert_eq!(visible_width(separator), 105);
+        assert_eq!(separator.trim_start().chars().count(), 90);
+        assert_eq!(separator.chars().take_while(|c| *c == ' ').count(), 15);
+        assert_eq!(wordmark.chars().take_while(|c| *c == ' ').count(), 15);
+        assert_eq!(visible_width(wordmark), 105);
     }
     #[test]
     fn truecolor_wordmark_uses_green_to_sky_gradient() {
