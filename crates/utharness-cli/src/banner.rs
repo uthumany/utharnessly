@@ -188,7 +188,7 @@ fn visible_width(value: &str) -> usize {
     while let Some(character) = characters.next() {
         if character == '\x1b' && characters.peek() == Some(&'[') {
             characters.next();
-            while let Some(next) = characters.next() {
+            for next in characters.by_ref() {
                 if next.is_ascii_alphabetic() {
                     break;
                 }
@@ -311,13 +311,13 @@ pub fn render_banner_with(
                 _ => unreachable!(),
             };
             lines.push(centered_line("-".repeat(content_width), width));
-            for row in 0..6 {
+            for (row, block_line) in BLOCK_WORDMARK.iter().enumerate() {
                 let wordmark = if layout == BannerLayout::Wrapped {
                     // A 3-row fallback remains the only safely readable option
                     // below 90 columns.
                     art_line(row / 2, depth, false)
                 } else {
-                    gradient_wordmark_line(BLOCK_WORDMARK[row], depth)
+                    gradient_wordmark_line(block_line, depth)
                 };
                 let composed = if layout == BannerLayout::Full {
                     format!("{}  {wordmark}", terminal_block_line(row, depth, ascii))
@@ -378,7 +378,7 @@ pub fn print_startup_banner(version: &str) -> anyhow::Result<()> {
 mod tests {
     use super::*;
     fn plain(w: u16) -> String {
-        render_banner_with(w, "0.2.17", false, BannerPreference::Full)
+        render_banner_with(w, "0.2.18", false, BannerPreference::Full)
     }
     #[test]
     fn maps_required_widths() {

@@ -4,6 +4,12 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.18] — 2026-09-05
+
+### Fixed
+
+- Resolved strict cross-platform Clippy warnings in the banner alignment renderer so the centered release passes the repository CI quality gate.
+
 ## [0.2.17] — 2026-09-05
 
 ### Fixed
