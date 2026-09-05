@@ -2,6 +2,18 @@ use crossterm::terminal;
 use std::io::{self, IsTerminal, Write};
 
 const WORD: &str = "UTHARNESS";
+/// The large wordmark is deliberately fixed-width: it is the supplied block-3D
+/// design, sized to fit a 90-column terminal without horizontal scrolling.
+const BLOCK_WORDMARK: [&str; 6] = [
+    "██╗   ██╗████████╗██╗  ██╗ █████╗ ██████╗ ███╗   ██╗███████╗███████╗███████╗",
+    "██║   ██║╚══██╔══╝██║  ██║██╔══██╗██╔══██╗████╗  ██║██╔════╝██╔════╝██╔════╝",
+    "██║   ██║   ██║   ███████║███████║██████╔╝██╔██╗ ██║█████╗  ███████╗███████╗",
+    "██║   ██║   ██║   ██╔══██║██╔══██║██╔══██╗██║╚██╗██║██╔══╝  ╚════██║╚════██║",
+    "╚██████╔╝   ██║   ██║  ██║██║  ██║██║  ██║██║ ╚████║███████╗███████╗███████╗",
+    " ╚═════╝    ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝╚══════╝",
+];
+const GRADIENT_START: (u8, u8, u8) = (34, 197, 94); // #22c55e
+const GRADIENT_END: (u8, u8, u8) = (56, 189, 248); // #38bdf8
 const COLORS: [(u8, u8, u8); 9] = [
     (180, 76, 255),
     (32, 214, 244),
@@ -132,6 +144,42 @@ fn reset(depth: ColorDepth) -> &'static str {
 fn paint(text: &str, index: usize, depth: ColorDepth) -> String {
     format!("{}{text}{}", start_color(index, depth), reset(depth))
 }
+fn gradient_color(column: usize, width: usize, depth: ColorDepth) -> String {
+    let ratio = column as f32 / width.saturating_sub(1).max(1) as f32;
+    let channel = |start: u8, end: u8| start as f32 + (end as f32 - start as f32) * ratio;
+    let (r, g, b) = (
+        channel(GRADIENT_START.0, GRADIENT_END.0).round() as u8,
+        channel(GRADIENT_START.1, GRADIENT_END.1).round() as u8,
+        channel(GRADIENT_START.2, GRADIENT_END.2).round() as u8,
+    );
+    match depth {
+        ColorDepth::None => String::new(),
+        ColorDepth::TrueColor => format!("\x1b[38;2;{r};{g};{b}m"),
+        // Green → cyan/sky blue in the closest broadly supported palette.
+        ColorDepth::Ansi256 => format!("\x1b[38;5;{}m", if ratio < 0.5 { 42 } else { 81 }),
+        ColorDepth::Ansi16 => format!("\x1b[{}m", if ratio < 0.5 { 32 } else { 36 }),
+    }
+}
+/// Paint one wordmark line as a horizontal ANSI gradient. Spaces deliberately
+/// remain unpainted, matching CSS `background-clip: text` while keeping output
+/// compact and preserving transparent terminal backgrounds.
+fn gradient_wordmark_line(line: &str, depth: ColorDepth) -> String {
+    if depth == ColorDepth::None {
+        return line.into();
+    }
+    let width = line.chars().count();
+    let mut output = String::with_capacity(line.len() * 3);
+    for (column, character) in line.chars().enumerate() {
+        if character == ' ' {
+            output.push(character);
+        } else {
+            output.push_str(&gradient_color(column, width, depth));
+            output.push(character);
+        }
+    }
+    output.push_str(reset(depth));
+    output
+}
 fn colored_word(depth: ColorDepth) -> String {
     WORD.chars()
         .enumerate()
@@ -178,7 +226,7 @@ fn terminal_block_line(row: usize, depth: ColorDepth, ascii: bool) -> String {
     };
     match row {
         0 => paint(top, 0, depth),
-        1 => format!(
+        2 => format!(
             "{}{} {}>_{}      {}{}",
             start_color(0, depth),
             side,
@@ -187,7 +235,14 @@ fn terminal_block_line(row: usize, depth: ColorDepth, ascii: bool) -> String {
             side,
             reset(depth)
         ),
-        _ => paint(bottom, 0, depth),
+        5 => paint(bottom, 0, depth),
+        _ => format!(
+            "{}{}          {}{}",
+            start_color(0, depth),
+            side,
+            side,
+            reset(depth)
+        ),
     }
 }
 
@@ -233,8 +288,14 @@ pub fn render_banner_with(
                 },
             );
             lines.push("-".repeat(n));
-            for row in 0..3 {
-                let wordmark = art_line(row, depth, layout == BannerLayout::Full);
+            for row in 0..6 {
+                let wordmark = if layout == BannerLayout::Wrapped {
+                    // A 3-row fallback remains the only safely readable option
+                    // below 90 columns.
+                    art_line(row / 2, depth, false)
+                } else {
+                    gradient_wordmark_line(BLOCK_WORDMARK[row], depth)
+                };
                 lines.push(if layout == BannerLayout::Full {
                     format!("{}  {wordmark}", terminal_block_line(row, depth, ascii))
                 } else {
@@ -334,8 +395,15 @@ mod tests {
         assert!(render_banner_with(120, "x", false, BannerPreference::Hidden).is_empty());
     }
     #[test]
-    fn truecolor_is_per_letter() {
-        assert!(start_color(0, ColorDepth::TrueColor).contains("38;2;180;76;255"));
-        assert!(start_color(1, ColorDepth::TrueColor).contains("38;2;32;214;244"));
+    fn block_wordmark_uses_requested_geometry() {
+        assert_eq!(BLOCK_WORDMARK.len(), 6);
+        assert!(BLOCK_WORDMARK.iter().all(|line| line.chars().count() == 76));
+        assert!(plain(90).contains(BLOCK_WORDMARK[0]));
+    }
+    #[test]
+    fn truecolor_wordmark_uses_green_to_sky_gradient() {
+        let rendered = gradient_wordmark_line(BLOCK_WORDMARK[0], ColorDepth::TrueColor);
+        assert!(rendered.contains("38;2;34;197;94"));
+        assert!(rendered.contains("38;2;56;189;248"));
     }
 }

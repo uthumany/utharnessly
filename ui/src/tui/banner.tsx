@@ -6,6 +6,17 @@ import { tone } from './theme.js';
 export type BannerTier = 'full' | 'compressed' | 'wrapped' | 'compact' | 'minimal' | 'hide';
 
 export const letterColors = ['#B44CFF', '#20D6F4', '#55DB24', '#FFD21F', '#FF8A16', '#FF3D4F', '#3478F6', '#B44CFF', '#B44CFF'] as const;
+export const bannerGradient = { start: '#22C55E', end: '#38BDF8' } as const;
+// Supplied block-3D UTHARNESS wordmark. It is exactly 76 terminal cells wide,
+// which lets the compressed tier render at the 90-column breakpoint.
+const blockWordmark = [
+  '██╗   ██╗████████╗██╗  ██╗ █████╗ ██████╗ ███╗   ██╗███████╗███████╗███████╗',
+  '██║   ██║╚══██╔══╝██║  ██║██╔══██╗██╔══██╗████╗  ██║██╔════╝██╔════╝██╔════╝',
+  '██║   ██║   ██║   ███████║███████║██████╔╝██╔██╗ ██║█████╗  ███████╗███████╗',
+  '██║   ██║   ██║   ██╔══██║██╔══██║██╔══██╗██║╚██╗██║██╔══╝  ╚════██║╚════██║',
+  '╚██████╔╝   ██║   ██║  ██║██║  ██║██║  ██║██║ ╚████║███████╗███████╗███████╗',
+  ' ╚═════╝    ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝╚══════╝'
+] as const;
 const glyphs: Record<string, string[]> = {
   U: ['█ █', '█ █', '█ █', '█ █', '███'], T: ['███', ' █ ', ' █ ', ' █ ', ' █ '],
   H: ['█ █', '█ █', '███', '█ █', '█ █'], A: [' █ ', '█ █', '███', '█ █', '█ █'],
@@ -34,7 +45,7 @@ export function bannerTier(width: number, rows: number, mode: BannerMode = 'full
 }
 
 export function bannerHeight(tier: BannerTier): number {
-  return ({ full: 10, compressed: 8, wrapped: 9, compact: 4, minimal: 2, hide: 0 })[tier];
+  return ({ full: 10, compressed: 10, wrapped: 10, compact: 4, minimal: 2, hide: 0 })[tier];
 }
 
 const iconSets: Record<IconMode, Record<string, string>> = {
@@ -61,11 +72,25 @@ function Wordmark({ rows, colorMode, doubled = false }: { rows: number[]; colorM
   })}</Box>)}</Box>;
 }
 
+function interpolateGradient(position: number, width: number): string {
+  const mix = position / Math.max(1, width - 1);
+  const start = [34, 197, 94]; const end = [56, 189, 248];
+  return `#${start.map((value, index) => Math.round(value + (end[index]! - value) * mix).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Native terminal equivalent of CSS background-clip:text: each visible cell
+ * is colored along the same horizontal green → sky-blue gradient. */
+function BlockWordmark({ colorMode }: { colorMode: ColorMode }) {
+  return <Box flexDirection="column">{blockWordmark.map((line, row) => <Text key={row} bold>{[...line].map((character, column) => (
+    <Text key={column} color={character === ' ' ? undefined : tone(interpolateGradient(column, line.length), colorMode)}>{character}</Text>
+  ))}</Text>)}</Box>;
+}
+
 function TerminalBlock({ colorMode }: { colorMode: ColorMode }) {
   const purple = tone(letterColors[0], colorMode); const green = tone(letterColors[2], colorMode);
   return <Box flexDirection="column" marginRight={2}>
     <Text color={purple}>╔══════════╗</Text><Text color={purple}>║          ║</Text>
-    <Text color={purple}>║ <Text color={green} bold>&gt;_</Text>       ║</Text><Text color={purple}>║          ║</Text><Text color={purple}>╚══════════╝</Text>
+    <Text color={purple}>║ <Text color={green} bold>&gt;_</Text>       ║</Text><Text color={purple}>║          ║</Text><Text color={purple}>║          ║</Text><Text color={purple}>╚══════════╝</Text>
   </Box>;
 }
 
@@ -85,7 +110,7 @@ export function ResponsiveBanner({ width, rows, mode, colorMode, iconMode }: { w
   const separator = '╌'.repeat(Math.max(20, Math.min(width - 2, tier === 'full' ? 104 : 82)));
   return <Box flexDirection="column">
     <Text dimColor>{separator}</Text>
-    <Box>{tier === 'full' ? <TerminalBlock colorMode={colorMode} /> : null}<Wordmark rows={tier === 'compressed' ? [0, 2, 4] : [0, 1, 2, 3, 4]} colorMode={colorMode} doubled={tier === 'full'} /></Box>
+    <Box>{tier === 'full' ? <TerminalBlock colorMode={colorMode} /> : null}{tier === 'wrapped' ? <Wordmark rows={[0, 1, 2, 3, 4]} colorMode={colorMode} /> : <BlockWordmark colorMode={colorMode} />}</Box>
     <Text dimColor>{separator}</Text>
     <StatusBlocks tier={tier} colorMode={colorMode} icons={icons} />
     <Text color={tone(letterColors[2], colorMode)} bold>&gt; <Text color={tone('#E8EDF3', colorMode)}>AUTONOMOUS AI AGENT TERMINAL HARNESS</Text> &lt;</Text>
