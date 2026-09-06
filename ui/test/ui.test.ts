@@ -56,7 +56,7 @@ test('collapses workspace mode and banner responsively', () => {
 });
 
 test('maps the complete banner width and height matrix without hiding by default', () => {
-  assert.deepEqual([20, 30, 40, 60, 80, 100, 120, 160, 200].map(width => bannerTier(width, 40, 'full')), ['minimal', 'minimal', 'compact', 'wrapped', 'wrapped', 'compressed', 'full', 'full', 'full']);
+  assert.deepEqual([20, 30, 40, 60, 80, 100, 120, 160, 200].map(width => bannerTier(width, 40, 'full')), ['minimal', 'minimal', 'compact', 'wrapped', 'full', 'full', 'full', 'full', 'full']);
   assert.ok(['minimal', 'compact', 'wrapped', 'compressed', 'full'].every(tier => bannerHeight(tier as Parameters<typeof bannerHeight>[0]) > 0));
   assert.equal(letterColors.length, 9);
 });

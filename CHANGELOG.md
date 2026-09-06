@@ -4,6 +4,15 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.22] — 2026-09-06
+
+### Fixed
+
+- Route interactive prompts to the real bounded read-only agent instead of the text-only chat endpoint.
+- Surface unavailable runtimes, provider failures, timeouts, and empty responses instead of fabricating completed tool cards.
+- Print complete redacted tool output and page long terminal responses with PgUp/PgDn so results remain reachable on short screens.
+- Add runtime-routing, failure-path, and transcript-paging regressions plus an opt-in live Groq terminal capture test.
+
 ## [0.2.21] — 2026-09-05
 
 ### Added

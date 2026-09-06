@@ -119,20 +119,21 @@ export async function runSkillCommand(args: string[], cwd = process.cwd()): Prom
 }
 
 export async function submitPrompt(prompt: string, cwd = process.cwd()): Promise<{ text: string; tool?: ToolCard }> {
-  const binary = runtimeBinary();
-  let commandResult = '';
+  const binary = runtimeBinary(cwd);
   try {
     await fs.access(binary);
-    const result = await execa(binary, ['chat', prompt], { cwd, reject: false, timeout: 10_000 });
-    commandResult = result.stdout.trim();
   } catch {
-    commandResult = '';
+    throw new Error('Agent runtime unavailable. Reinstall UTHARNESS or set UTHARNESS_RUNTIME_BIN.');
   }
-
-  return {
-    text: commandResult || `I received: “${prompt}”\n\nI can inspect files, review Git state, and run bounded SAFE tasks from this terminal.`,
-    tool: commandResult ? undefined : { id: id(), kind: 'AGENT', name: 'agent_response', icon: '✦', state: 'completed', result: 'Completed', metric: 'offline planner', elapsed: '42ms' }
-  };
+  const result = await execa(binary, ['agents', 'run', prompt, '--workspace', cwd], {
+    cwd, reject: false, timeout: 600_000,
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr.trim() || `Agent runtime exited with status ${result.exitCode}.`);
+  }
+  const text = result.stdout.trim();
+  if (!text) throw new Error('Agent runtime completed without output.');
+  return { text };
 }
 
 export function watchRuntime(cwd: string, onChange: () => void): FSWatcher {

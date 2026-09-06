@@ -839,7 +839,9 @@ fn autonomous(args: AutonomousArgs) -> Result<()> {
         }
         let output = execute_autonomous_step(&policy, &root, &step)?;
         let safe_output = Policy::redact(&output);
-        println!("   {}", safe_output.lines().next().unwrap_or("completed"));
+        for line in safe_output.lines() {
+            println!("   {line}");
+        }
         app.storage.record_event(
             "agent",
             session.id,

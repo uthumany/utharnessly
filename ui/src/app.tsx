@@ -4,6 +4,7 @@ import type { FSWatcher } from 'chokidar';
 import { bannerHeight, Inspector, MessageRow, Navigation, Overlay, palette, PersistentHeader, StartupTips, StatusBar, WorkspaceWarning } from './components.js';
 import { loadSnapshot, runSkillCommand, submitPrompt, watchRuntime } from './runtime.js';
 import { Composer } from './tui/composer.js';
+import { transcriptPages } from './tui/transcript.js';
 import { effectiveLayout, getBreakpoint, getTermuxBreakpoint, workspaceWidths } from './tui/responsive.js';
 import { bannerTier } from './tui/banner.js';
 import { defaultUiState, loadUiState, saveUiState } from './tui/state.js';
@@ -83,15 +84,18 @@ export function App() {
   const colorMode = getColorMode();
   const compact = breakpoint === 'tiny' || breakpoint === 'compact';
   const contentWidth = Math.max(20, columns - (compact ? 0 : 4));
-  const banner = bannerTier(columns, rows, ui.bannerMode);
+  const headerWidth = columns - (compact ? 0 : 2);
+  const banner = bannerTier(headerWidth, rows, ui.bannerMode);
   const headerHeight = bannerHeight(banner);
   const showTips = !compact && rows >= 32;
   const showWarning = Boolean(snapshot && !snapshot.projectSpecific && !compact && rows >= 28);
   const showInputHints = columns >= 40 && rows >= 15;
   const footerHeight = 3 + (columns < 40 ? 1 : 3) + (showInputHints ? 1 : 0);
-  const fixedHeight = headerHeight + (showTips ? 4 : 0) + (showWarning ? 4 : 0) + footerHeight + (overlay ? Math.min(15, (overlayDefaults[overlay]?.length ?? 1) + 3) : 0);
+  const fixedHeight = 1 + headerHeight + (showTips ? 5 : 0) + (showWarning ? 4 : 0) + footerHeight + (overlay ? Math.min(15, (overlayDefaults[overlay]?.length ?? 1) + 3) : 0);
   const chatHeight = Math.max(1, rows - fixedHeight);
-  const visibleCount = Math.max(1, Math.floor(chatHeight / (compact ? 3 : 4)));
+  const chatWidth = mode === 'workspace' ? workspaceWidths(columns).chat : contentWidth;
+  const messageWidth = mode === 'workspace' ? chatWidth - 3 : chatWidth;
+  const pages = transcriptPages(messages, messageWidth, Math.max(1, chatHeight - (streaming ? 1 : 0)));
 
   useEffect(() => { void loadUiState().then(state => { const bannerMode = ['full', 'compact', 'minimal', 'hide'].includes(process.env.UTHARNESS_BANNER ?? '') ? process.env.UTHARNESS_BANNER as PersistedUiState['bannerMode'] : state.bannerMode; const iconMode = ['nerd', 'unicode', 'ascii'].includes(process.env.UTHARNESS_ICONS ?? '') ? process.env.UTHARNESS_ICONS as PersistedUiState['iconMode'] : state.iconMode; setUi({ ...state, bannerMode, iconMode }); setHydrated(true); }); }, []);
   useEffect(() => { if (!hydrated) return; const timer = setTimeout(() => void saveUiState(ui).catch(() => undefined), 180); return () => clearTimeout(timer); }, [ui, hydrated]);
@@ -193,26 +197,26 @@ export function App() {
       else if (input && !key.ctrl) setOverlayQuery(value => value + input);
       return;
     }
-    if (key.pageUp) setScrollOffset(value => Math.min(messages.length, value + Math.max(1, visibleCount - 1)));
-    if (key.pageDown) setScrollOffset(value => Math.max(0, value - Math.max(1, visibleCount - 1)));
+    if (key.pageUp) setScrollOffset(value => Math.min(Math.max(0, pages.length - 1), value + 1));
+    if (key.pageDown) setScrollOffset(value => Math.max(0, value - 1));
     if (key.upArrow && composerFocused && !ui.draft && ui.history.length) { const next = Math.min(ui.history.length - 1, historyIndex + 1); setHistoryIndex(next); setDraft(ui.history[ui.history.length - next - 1] ?? ''); }
     if (key.downArrow && composerFocused && historyIndex >= 0) { const next = historyIndex - 1; setHistoryIndex(next); setDraft(next < 0 ? '' : (ui.history[ui.history.length - next - 1] ?? '')); }
   });
 
-  const visibleMessages = messages.slice(Math.max(0, messages.length - visibleCount - scrollOffset), messages.length - scrollOffset || undefined);
-  const chatWidth = mode === 'workspace' ? workspaceWidths(columns).chat : contentWidth;
+  const pageIndex = Math.max(0, pages.length - 1 - scrollOffset);
+  const visibleMessages = pages.slice(pageIndex, pageIndex + 1);
   const loadingPercent = ui.reducedMotion ? 100 : Math.min(100, tick + 1);
   const loadingCells = Math.ceil(loadingPercent / 10);
   const chat = <Box flexDirection="column" width={chatWidth} height={chatHeight} overflow="hidden" paddingX={mode === 'workspace' ? 1 : 0}>{runtimeError ? <Text color={tone(palette.error, colorMode)}>Runtime: {runtimeError}</Text> : null}{visibleMessages.map(message => <MessageRow key={message.id} message={message} width={mode === 'workspace' ? chatWidth - 3 : chatWidth} colorMode={colorMode} tick={tick} />)}{streaming ? <Text color={tone(palette.primary, colorMode)}>  <Text color={tone(palette.error, colorMode)}>𓄆</Text> AGENT preparing response <Text color={tone(palette.warning, colorMode)}>{'█'.repeat(loadingCells)}</Text><Text color={tone(palette.primary, colorMode)}>{'▒'.repeat(10 - loadingCells)}</Text> <Text color={tone(palette.warning, colorMode)}>{loadingPercent}%</Text></Text> : null}</Box>;
 
-  return <Box flexDirection="column" width="100%" height={rows} paddingX={compact ? 0 : 1}>
-    <PersistentHeader width={columns} rows={rows} mode={ui.bannerMode} colorMode={colorMode} iconMode={ui.iconMode} />
+  return <Box flexDirection="column" width={columns} height={rows - 1} paddingX={compact ? 0 : 1}>
+    <Box flexShrink={0} height={headerHeight}><PersistentHeader width={headerWidth} rows={rows} mode={ui.bannerMode} colorMode={colorMode} iconMode={ui.iconMode} /></Box>
     {showTips ? <StartupTips colorMode={colorMode} /> : null}
     {showWarning ? <WorkspaceWarning colorMode={colorMode} /> : null}
     {mode === 'workspace' && snapshot ? <Box height={chatHeight}><Navigation colorMode={colorMode} width={workspaceWidths(columns).navigation} />{chat}<Inspector snapshot={snapshot} colorMode={colorMode} width={workspaceWidths(columns).inspector} /></Box> : chat}
     {derivedOverlay ? <Overlay kind={derivedOverlay} items={visibleItems} selected={selected} query={query} width={contentWidth} colorMode={colorMode} /> : null}
     <Composer value={ui.draft} onChange={setDraft} onSubmit={send} width={contentWidth} colorMode={colorMode} focused={composerFocused && !overlay} disabled={streaming || Boolean(overlay)} placeholder={compact ? 'Ask Utharness…' : 'Type your message or @path/to/file'} />
-    {showInputHints ? <Text color={tone(palette.muted, colorMode)}> {composerFocused ? 'Enter send · Shift+Enter newline' : 'Tab focus composer'} · Ctrl+K commands · Ctrl+B {mode === 'focus' ? 'workspace' : 'focus'}</Text> : null}
+    {showInputHints ? <Text color={tone(palette.muted, colorMode)} wrap="truncate-end"> Enter send · PgUp/PgDn results {pages.length ? `${pageIndex + 1}/${pages.length}` : ''} · Ctrl+K commands</Text> : null}
     {snapshot ? <StatusBar snapshot={snapshot} width={contentWidth} colorMode={colorMode} /> : <Text color={tone(palette.muted, colorMode)}>Loading runtime status…</Text>}
   </Box>;
 }
