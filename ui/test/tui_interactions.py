@@ -20,7 +20,7 @@ with tempfile.TemporaryDirectory(prefix='utharness-interactions-') as state:
     if pid == 0:
         os.chdir(ROOT)
         os.environ.update(TERM='xterm-256color', COLORTERM='truecolor', UTHARNESS_PROVIDER='groq',
-                          UTHARNESS_MODEL='model-a', XDG_STATE_HOME=state, FORCE_COLOR='3',
+                          UTHARNESS_MODEL='model-a', XDG_STATE_HOME=state, FORCE_COLOR='3', CI='false',
                           UTHARNESS_RUNTIME_BIN=str(ROOT / 'ui/test/fixtures/agent-runtime.sh'))
         os.environ.pop('NO_COLOR', None)
         os.execvp('node', ['node', str(ROOT / 'ui/dist/index.js')])
