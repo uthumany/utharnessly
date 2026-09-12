@@ -1,10 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useApp, useInput, useStdout } from 'ink';
 import type { FSWatcher } from 'chokidar';
 import { bannerHeight, Inspector, MessageRow, Navigation, Overlay, palette, PersistentHeader, StartupTips, StatusBar, WorkspaceWarning } from './components.js';
-import { loadSnapshot, runSkillCommand, submitPrompt, watchRuntime } from './runtime.js';
+import { loadSnapshot, loadModelCatalog, runRuntimeCommand, submitPrompt, watchRuntime } from './runtime.js';
+import { localCommandArgs } from './commands.js';
 import { Composer } from './tui/composer.js';
 import { transcriptPages } from './tui/transcript.js';
+import { icon } from './tui/icons.js';
 import { effectiveLayout, getBreakpoint, getTermuxBreakpoint, workspaceWidths } from './tui/responsive.js';
 import { bannerTier } from './tui/banner.js';
 import { defaultUiState, loadUiState, saveUiState } from './tui/state.js';
@@ -14,7 +16,7 @@ import type { Message, OverlayKind, PaletteItem, PersistedUiState, RuntimeSnapsh
 const commands: PaletteItem[] = [
   { id: 'help', label: '/help', description: 'keyboard and command help', shortcut: 'F1', overlay: 'help' },
   { id: 'new', label: '/new', description: 'start a new local session', command: '/new' },
-  { id: 'resume', label: '/resume', description: 'resume a saved session', command: '/resume' },
+  { id: 'resume', label: '/resume', description: 'list saved sessions (CLI chat --session to resume)', command: '/resume' },
   { id: 'model', label: '/model', description: 'choose the active model', shortcut: 'Ctrl+P', overlay: 'models' },
   { id: 'provider', label: '/provider', description: 'inspect provider route', command: '/provider' },
   { id: 'agents', label: '/agents', description: 'inspect agent roles', shortcut: 'Ctrl+G', overlay: 'agents' },
@@ -28,7 +30,6 @@ const commands: PaletteItem[] = [
   { id: 'status', label: '/status', description: 'refresh runtime telemetry', command: '/status' },
   { id: 'context', label: '/context', description: 'inspect known context', overlay: 'context' },
   { id: 'banner', label: '/banner', description: 'full, compact, or hide', command: '/banner' },
-  { id: 'theme', label: '/theme', description: 'switch terminal theme', command: '/theme' },
   { id: 'logs', label: '/logs', description: 'open runtime logs', shortcut: 'Ctrl+L', overlay: 'logs' },
   { id: 'doctor', label: '/doctor', description: 'run local diagnostics', command: '/doctor' },
   { id: 'quit', label: '/quit', description: 'exit Utharness', command: '/quit' }
@@ -36,17 +37,13 @@ const commands: PaletteItem[] = [
 
 const overlayDefaults: Record<Exclude<OverlayKind, null>, PaletteItem[]> = {
   commands,
-  models: [
-    { id: 'current', label: 'Current model', description: 'keep the active runtime selection' },
-    { id: 'gpt-4o-mini', label: 'gpt-4o-mini', description: 'OpenAI · tools · 128K context' },
-    { id: 'offline', label: 'offline planner', description: 'Local · deterministic · no network' }
-  ],
+  models: [],
   files: [{ id: 'cwd', label: '@file', description: 'type a path relative to this workspace' }, { id: 'folder', label: '@folder', description: 'reference a directory' }],
-  agents: [{ id: 'planner', label: '○ Planner', description: 'Waiting' }, { id: 'editor', label: '○ Editor', description: 'Waiting' }, { id: 'tester', label: '○ Tester', description: 'Waiting' }, { id: 'reviewer', label: '○ Reviewer', description: 'Waiting' }],
+  agents: [{ id: 'safe', label: 'SAFE agent', description: 'Use /agents to inspect native capabilities' }],
   tasks: [{ id: 'idle', label: '○ Ready for input', description: 'No active task' }],
-  memory: [{ id: 'search', label: 'Project memory', description: 'use /memory or @memory to search' }],
-  jobs: [{ id: 'idle', label: 'No active jobs', description: 'background queue is idle' }],
-  logs: [{ id: 'info', label: 'Runtime healthy', description: 'no errors recorded this session' }],
+  memory: [{ id: 'search', label: 'Project memory', description: '/memory QUERY searches persisted memory' }],
+  jobs: [{ id: 'unsupported', label: 'Background jobs unavailable', description: 'This release runs foreground tasks only' }],
+  logs: [{ id: 'persisted', label: 'Persisted runtime events', description: 'Events are stored in the local SQLite database; no log browser yet' }],
   help: [
     { id: 'palette', label: 'Command palette', description: 'search all commands', shortcut: 'Ctrl+K' },
     { id: 'workspace', label: 'Workspace mode', description: 'toggle navigation and inspector', shortcut: 'Ctrl+B' },
@@ -64,8 +61,11 @@ export function App() {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [snapshot, setSnapshot] = useState<RuntimeSnapshot | null>(null);
+  const [modelItems, setModelItems] = useState<PaletteItem[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [ui, setUi] = useState<PersistedUiState>(defaultUiState);
+  const uiRef = useRef(ui);
+  uiRef.current = ui;
   const [hydrated, setHydrated] = useState(false);
   const [overlay, setOverlay] = useState<OverlayKind>(null);
   const [overlayQuery, setOverlayQuery] = useState('');
@@ -73,6 +73,8 @@ export function App() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [streaming, setStreaming] = useState(false);
+  const activeRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => { activeRequest.current?.abort(); }, []);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [composerFocused, setComposerFocused] = useState(true);
@@ -87,11 +89,13 @@ export function App() {
   const headerWidth = columns - (compact ? 0 : 2);
   const banner = bannerTier(headerWidth, rows, ui.bannerMode);
   const headerHeight = bannerHeight(banner);
-  const showTips = !compact && rows >= 32;
-  const showWarning = Boolean(snapshot && !snapshot.projectSpecific && !compact && rows >= 28);
+  const hasOverlay = Boolean(overlay || ui.draft.startsWith('/') || (ui.draft.split(/\s+/).pop() ?? '').startsWith('@'));
+  const showTips = !hasOverlay && !compact && rows >= 32;
+  const showWarning = Boolean(!hasOverlay && snapshot && !snapshot.projectSpecific && !compact && rows >= 28);
   const showInputHints = columns >= 40 && rows >= 15;
   const footerHeight = 3 + (columns < 40 ? 1 : 3) + (showInputHints ? 1 : 0);
-  const fixedHeight = 1 + headerHeight + (showTips ? 5 : 0) + (showWarning ? 4 : 0) + footerHeight + (overlay ? Math.min(15, (overlayDefaults[overlay]?.length ?? 1) + 3) : 0);
+  const overlayLimit = Math.max(1, Math.min(12, rows - headerHeight - footerHeight - 7));
+  const fixedHeight = 1 + headerHeight + (showTips ? 5 : 0) + (showWarning ? 4 : 0) + footerHeight + (hasOverlay ? overlayLimit + 5 : 0);
   const chatHeight = Math.max(1, rows - fixedHeight);
   const chatWidth = mode === 'workspace' ? workspaceWidths(columns).chat : contentWidth;
   const messageWidth = mode === 'workspace' ? chatWidth - 3 : chatWidth;
@@ -99,7 +103,7 @@ export function App() {
 
   useEffect(() => { void loadUiState().then(state => { const bannerMode = ['full', 'compact', 'minimal', 'hide'].includes(process.env.UTHARNESS_BANNER ?? '') ? process.env.UTHARNESS_BANNER as PersistedUiState['bannerMode'] : state.bannerMode; const iconMode = ['nerd', 'unicode', 'ascii'].includes(process.env.UTHARNESS_ICONS ?? '') ? process.env.UTHARNESS_ICONS as PersistedUiState['iconMode'] : state.iconMode; setUi({ ...state, bannerMode, iconMode }); setHydrated(true); }); }, []);
   useEffect(() => { if (!hydrated) return; const timer = setTimeout(() => void saveUiState(ui).catch(() => undefined), 180); return () => clearTimeout(timer); }, [ui, hydrated]);
-  useEffect(() => { if (!streaming || ui.reducedMotion) return; const timer = setInterval(() => setTick(value => value + 1), 100); return () => clearInterval(timer); }, [streaming, ui.reducedMotion]);
+  useEffect(() => { if (!streaming || ui.reducedMotion) return; const timer = setInterval(() => setTick(value => value + 1), 500); return () => clearInterval(timer); }, [streaming, ui.reducedMotion]);
 
   useEffect(() => {
     let active = true;
@@ -108,7 +112,7 @@ export function App() {
       try {
         const next = await loadSnapshot();
         if (!active) return;
-        setSnapshot(current => ({ ...next, model: ui.selectedModel ?? current?.model ?? next.model, provider: ui.selectedProvider ?? current?.provider ?? next.provider }));
+        setSnapshot(current => ({ ...next, model: uiRef.current.selectedModel ?? current?.model ?? next.model, provider: uiRef.current.selectedProvider ?? current?.provider ?? next.provider }));
         setMessages(current => current.length ? current : next.messages);
         setRuntimeError(null);
         watcher ??= watchRuntime(process.cwd(), refresh);
@@ -125,33 +129,45 @@ export function App() {
     if (ui.draft.startsWith('/')) return 'commands';
     return null;
   }, [overlay, ui.draft]);
-  const allItems = derivedOverlay ? overlayDefaults[derivedOverlay] : [];
+  const allItems = derivedOverlay === 'models' ? modelItems : derivedOverlay ? overlayDefaults[derivedOverlay] : [];
   const query = overlay ? overlayQuery : (derivedOverlay === 'commands' ? ui.draft : (ui.draft.split(/\s+/).pop() ?? ''));
   const visibleItems = useMemo(() => {
     const needle = query.replace(/^[/@]/, '').toLowerCase();
     return allItems.filter(item => !needle || `${item.label} ${item.description}`.toLowerCase().includes(needle));
   }, [allItems, query]);
 
-  const openOverlay = (kind: Exclude<OverlayKind, null>) => { setOverlay(kind); setOverlayQuery(''); setSelected(0); setComposerFocused(false); };
+  const openOverlay = (kind: Exclude<OverlayKind, null>) => {
+    setOverlay(kind); setOverlayQuery(''); setSelected(0); setComposerFocused(false);
+    if (kind === 'models') {
+      setModelItems([{ id: 'loading', label: 'Loading models…', description: 'Querying configured provider' }]);
+      void loadModelCatalog(process.cwd(), ui.selectedProvider ?? snapshot?.provider).then(catalog => {
+        setModelItems(catalog.models.map(model => ({ id: model, label: model, description: catalog.provider })));
+      }).catch(error => setModelItems([{ id: 'error', label: 'Model catalog unavailable', description: String(error.message ?? error) }]));
+    }
+  };
   const closeOverlay = () => { setOverlay(null); setOverlayQuery(''); setSelected(0); setComposerFocused(true); };
   const setDraft = (draft: string) => setUi(current => ({ ...current, draft }));
-  const refreshSnapshot = async () => setSnapshot(await loadSnapshot());
+  const reportError = (error: unknown) => setMessages(current => unique([...current, { id: `${Date.now()}-error`, role: 'error', text: error instanceof Error ? error.message : String(error), time: now() }]));
+  const refreshSnapshot = async () => { try { const next = await loadSnapshot(); setSnapshot({ ...next, model: uiRef.current.selectedModel ?? next.model, provider: uiRef.current.selectedProvider ?? next.provider }); } catch (error) { reportError(error); } };
 
   const runLocalCommand = (prompt: string): boolean => {
     const [command, argument] = prompt.split(/\s+/, 2);
-    if (command === '/quit') { exit(); return true; }
+    if (command === '/quit') { activeRequest.current?.abort(); exit(); return true; }
     if (command === '/help') { openOverlay('help'); return true; }
     if (command === '/model') { openOverlay('models'); return true; }
     if (command === '/files') { openOverlay('files'); return true; }
-    if (command === '/agents') { openOverlay('agents'); return true; }
     if (command === '/tasks') { openOverlay('tasks'); return true; }
-    if (command === '/memory') { openOverlay('memory'); return true; }
     if (command === '/jobs') { openOverlay('jobs'); return true; }
     if (command === '/logs') { openOverlay('logs'); return true; }
     if (command === '/context') { openOverlay('context'); return true; }
     if (command === '/status') { void refreshSnapshot(); return true; }
     if (command === '/banner') { const next = argument === 'hide' || argument === 'minimal' || argument === 'compact' || argument === 'full' ? argument : 'full'; setUi(current => ({ ...current, bannerMode: next })); return true; }
-    if (command === '/skills') { void runSkillCommand(['list', '12']).then(text => { setMessages(current => unique([...current, { id: `${Date.now()}-skills`, role: 'system', text, time: now() }])); }); return true; }
+    if (command === '/git') { void loadSnapshot().then(next => setMessages(current => unique([...current, { id: `${Date.now()}-git`, role: 'system', text: JSON.stringify(next.git, null, 2), time: now() }]))).catch(reportError); return true; }
+    if (prompt.startsWith('/')) {
+      try { void runRuntimeCommand(localCommandArgs(prompt)).then(text => { setMessages(current => unique([...current, { id: `${Date.now()}-command`, role: 'system', text: text || 'No results.', time: now() }])); setScrollOffset(0); }).catch(reportError); }
+      catch (error) { reportError(error); }
+      return true;
+    }
     return false;
   };
 
@@ -165,24 +181,27 @@ export function App() {
     setMessages(current => unique([...current, userMessage]));
     setTick(0);
     setStreaming(true);
-    void submitPrompt(prompt).then(response => {
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    void submitPrompt(prompt, process.cwd(), { provider: ui.selectedProvider ?? snapshot?.provider, model: ui.selectedModel ?? snapshot?.model, signal: controller.signal }).then(response => {
+      if (controller.signal.aborted) return;
       const id = `${Date.now()}-assistant`;
       setMessages(current => unique([...current, { id, role: 'utharness', text: response.text, time: now(), tool: response.tool }]));
       setScrollOffset(0);
-    }).catch(error => setMessages(current => unique([...current, { id: `${Date.now()}-error`, role: 'error', text: error instanceof Error ? error.message : String(error), time: now() }]))).finally(() => setStreaming(false));
+    }).catch(error => setMessages(current => unique([...current, { id: `${Date.now()}-error`, role: controller.signal.aborted ? 'system' : 'error', text: error instanceof Error ? error.message : String(error), time: now() }]))).finally(() => { if (activeRequest.current === controller) { activeRequest.current = null; setStreaming(false); } });
   };
 
   const activateSelected = () => {
     const item = visibleItems[selected];
     if (!item) return;
     if (derivedOverlay === 'commands') { if (item.overlay) openOverlay(item.overlay); else setDraft(`${item.label} `); if (!item.overlay) closeOverlay(); return; }
-    if (derivedOverlay === 'models' && item.id !== 'current') { setUi(current => ({ ...current, selectedModel: item.id })); setSnapshot(current => current ? { ...current, model: item.id } : current); closeOverlay(); return; }
+    if (derivedOverlay === 'models') { if (item.id === 'loading' || item.id === 'error') return; setUi(current => ({ ...current, selectedModel: item.id, selectedProvider: item.description })); setSnapshot(current => current ? { ...current, model: item.id, provider: item.description } : current); closeOverlay(); return; }
     if (derivedOverlay === 'files') { const token = ui.draft.split(/\s+/).pop() ?? ''; setDraft(`${ui.draft.slice(0, ui.draft.length - token.length)}${item.label} `); closeOverlay(); return; }
     closeOverlay();
   };
 
   useInput((input, key) => {
-    if (key.ctrl && input === 'c') { if (streaming) { setStreaming(false); setMessages(current => unique([...current, { id: `${Date.now()}-cancel`, role: 'system', text: 'Active operation cancelled.', time: now() }])); } else exit(); return; }
+    if (key.ctrl && input === 'c') { if (streaming) activeRequest.current?.abort(); else exit(); return; }
     if (key.ctrl && input === 'b') { setUi(current => ({ ...current, layoutMode: current.layoutMode === 'focus' ? 'workspace' : 'focus' })); return; }
     const shortcuts: Record<string, Exclude<OverlayKind, null>> = { k: 'commands', p: 'models', o: 'files', g: 'agents', t: 'tasks', m: 'memory', j: 'jobs', l: 'logs' };
     if (key.ctrl && shortcuts[input]) { openOverlay(shortcuts[input]!); return; }
@@ -205,16 +224,14 @@ export function App() {
 
   const pageIndex = Math.max(0, pages.length - 1 - scrollOffset);
   const visibleMessages = pages.slice(pageIndex, pageIndex + 1);
-  const loadingPercent = ui.reducedMotion ? 100 : Math.min(100, tick + 1);
-  const loadingCells = Math.ceil(loadingPercent / 10);
-  const chat = <Box flexDirection="column" width={chatWidth} height={chatHeight} overflow="hidden" paddingX={mode === 'workspace' ? 1 : 0}>{runtimeError ? <Text color={tone(palette.error, colorMode)}>Runtime: {runtimeError}</Text> : null}{visibleMessages.map(message => <MessageRow key={message.id} message={message} width={mode === 'workspace' ? chatWidth - 3 : chatWidth} colorMode={colorMode} tick={tick} />)}{streaming ? <Text color={tone(palette.primary, colorMode)}>  <Text color={tone(palette.error, colorMode)}>𓄆</Text> AGENT preparing response <Text color={tone(palette.warning, colorMode)}>{'█'.repeat(loadingCells)}</Text><Text color={tone(palette.primary, colorMode)}>{'▒'.repeat(10 - loadingCells)}</Text> <Text color={tone(palette.warning, colorMode)}>{loadingPercent}%</Text></Text> : null}</Box>;
+  const chat = <Box flexDirection="column" width={chatWidth} height={chatHeight} overflow="hidden" paddingX={mode === 'workspace' ? 1 : 0}>{runtimeError ? <Text color={tone(palette.error, colorMode)}>Runtime: {runtimeError}</Text> : null}{visibleMessages.map(message => <MessageRow key={message.id} message={message} width={mode === 'workspace' ? chatWidth - 3 : chatWidth} colorMode={colorMode} tick={tick} />)}{streaming ? <Text color={tone(palette.primary, colorMode)} wrap="truncate-end"><Text color={tone(palette.error, colorMode)} dimColor={!ui.reducedMotion && tick % 2 === 1}>{icon('blinker', ui.iconMode !== 'ascii')}</Text> Agent working · Ctrl+C cancels</Text> : null}</Box>;
 
   return <Box flexDirection="column" width={columns} height={rows - 1} paddingX={compact ? 0 : 1}>
     <Box flexShrink={0} height={headerHeight}><PersistentHeader width={headerWidth} rows={rows} mode={ui.bannerMode} colorMode={colorMode} iconMode={ui.iconMode} /></Box>
     {showTips ? <StartupTips colorMode={colorMode} /> : null}
     {showWarning ? <WorkspaceWarning colorMode={colorMode} /> : null}
     {mode === 'workspace' && snapshot ? <Box height={chatHeight}><Navigation colorMode={colorMode} width={workspaceWidths(columns).navigation} />{chat}<Inspector snapshot={snapshot} colorMode={colorMode} width={workspaceWidths(columns).inspector} /></Box> : chat}
-    {derivedOverlay ? <Overlay kind={derivedOverlay} items={visibleItems} selected={selected} query={query} width={contentWidth} colorMode={colorMode} /> : null}
+    {derivedOverlay ? <Overlay kind={derivedOverlay} items={visibleItems} selected={selected} query={query} width={contentWidth} colorMode={colorMode} maxItems={overlayLimit} /> : null}
     <Composer value={ui.draft} onChange={setDraft} onSubmit={send} width={contentWidth} colorMode={colorMode} focused={composerFocused && !overlay} disabled={streaming || Boolean(overlay)} placeholder={compact ? 'Ask Utharness…' : 'Type your message or @path/to/file'} />
     {showInputHints ? <Text color={tone(palette.muted, colorMode)} wrap="truncate-end"> Enter send · PgUp/PgDn results {pages.length ? `${pageIndex + 1}/${pages.length}` : ''} · Ctrl+K commands</Text> : null}
     {snapshot ? <StatusBar snapshot={snapshot} width={contentWidth} colorMode={colorMode} /> : <Text color={tone(palette.muted, colorMode)}>Loading runtime status…</Text>}

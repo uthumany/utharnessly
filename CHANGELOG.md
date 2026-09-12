@@ -4,6 +4,23 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.23] — 2026-09-13
+
+### Fixed
+
+- Apply the selected provider/model to real agent requests and load the model menu from the backend catalog.
+- Stop the backend subprocess on cancellation and reject unknown slash commands locally.
+- Route supported slash commands to native functions, preserving multiword arguments.
+- Submit input correctly when text and Enter arrive together; keep model-menu entries visible in bounded terminal space.
+- Replace simulated inference percentages with an honest activity indicator and explicit unavailable-feature messages.
+
+### Added
+
+- Integrate `@vr_patel/tui` 1.0.0 for measured npm download progress, counts, ETA, and status badges.
+- Bound downloads with a timeout, remove partial files on failure, restore the cursor, and disable animation for redirected or unsuitable terminals.
+- Add yellow selector, red agent/activity glyphs, ASCII alternatives, and empty `NO_COLOR` support.
+- Add runtime, command, presentation, downloader, native waiting, and PTY interaction regression coverage.
+
 ## [0.2.22] — 2026-09-06
 
 ### Fixed

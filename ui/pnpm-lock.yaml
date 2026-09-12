@@ -11,6 +11,9 @@ importers:
       '@inkjs/ui':
         specifier: ^2.0.0
         version: 2.0.0(ink@5.2.1(@types/react@18.3.31)(react-devtools-core@4.28.5)(react@18.3.1))
+      '@vr_patel/tui':
+        specifier: 1.0.0
+        version: 1.0.0
       chalk:
         specifier: ^5.4.1
         version: 5.6.2
@@ -567,6 +570,10 @@ packages:
 
   '@types/tinycolor2@1.4.6':
     resolution: {integrity: sha512-iEN8J0BoMnsWBqjVbWH/c0G0Hh7O21lpR2/+PrvAVgWdzL7eexIFm4JN/Wn10PTcmNdtS6U67r499mlWMXOxNw==}
+
+  '@vr_patel/tui@1.0.0':
+    resolution: {integrity: sha512-HuPZpOoJJgsiKe5jxGnqKznuAw2S2p/XH6d4aYdP+QRxDGXORzYXdMc2X+iGOk0+OORzhyy9+IdTMjXFzKMlpA==}
+    engines: {node: '>=18'}
 
   acorn@8.18.0:
     resolution: {integrity: sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ==}
@@ -1367,6 +1374,8 @@ snapshots:
       csstype: 3.2.3
 
   '@types/tinycolor2@1.4.6': {}
+
+  '@vr_patel/tui@1.0.0': {}
 
   acorn@8.18.0: {}
 

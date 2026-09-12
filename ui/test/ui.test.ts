@@ -79,6 +79,7 @@ test('composer supports multiline and editing shortcuts', () => {
   assert.deepEqual(editComposer('hello world', 11, 'w', { ...plain, ctrl: true }), { value: 'hello ', cursor: 6 });
   assert.equal(editComposer('send', 4, '', { ...plain, return: true }).submit, true);
   assert.deepEqual(editComposer('draft', 3, 'u', { ...plain, ctrl: true }), { value: '', cursor: 0 });
+  assert.deepEqual(editComposer('', 0, '/doctor\r', plain), { value: '/doctor', cursor: 7, submit: true });
 });
 
 test('persists and restores safe UI preferences', async () => {

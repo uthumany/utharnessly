@@ -10,3 +10,4 @@
 /ui/screenshots/*.png
 /ui/dist/
 /ui/node_modules/
+/packages/utharnessly-npm/node_modules/

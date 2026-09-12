@@ -9,6 +9,10 @@ export type ComposerEdit = { value: string; cursor: number; submit?: boolean };
 export function editComposer(value: string, cursor: number, input: string, key: Pick<Key, 'backspace' | 'delete' | 'leftArrow' | 'rightArrow' | 'return' | 'ctrl' | 'shift'>): ComposerEdit {
   if (key.return && (key.ctrl || !key.shift)) return { value, cursor, submit: true };
   if (key.return && key.shift) return { value: `${value.slice(0, cursor)}\n${value.slice(cursor)}`, cursor: cursor + 1 };
+  if (!key.ctrl && input.endsWith('\r')) {
+    const inserted = input.slice(0, -1).replace(/\r\n?/g, '\n');
+    return { value: value.slice(0, cursor) + inserted + value.slice(cursor), cursor: cursor + inserted.length, submit: true };
+  }
   if (key.leftArrow) return { value, cursor: Math.max(0, cursor - 1) };
   if (key.rightArrow) return { value, cursor: Math.min(value.length, cursor + 1) };
   if (key.ctrl && input === 'a') return { value, cursor: value.lastIndexOf('\n', cursor - 1) + 1 };
@@ -27,7 +31,7 @@ export function Composer({ value, onChange, onSubmit, width, colorMode, focused,
   useInput((input, key) => {
     if (!focused || disabled || key.escape || key.tab || key.upArrow || key.downArrow || key.pageUp || key.pageDown) return;
     const next = editComposer(value, cursor, input, key);
-    if (next.submit) { onSubmit(value); setCursor(0); return; }
+    if (next.submit) { onSubmit(next.value); setCursor(0); return; }
     if (next.value !== value) onChange(next.value);
     setCursor(next.cursor);
   }, { isActive: focused && !disabled });

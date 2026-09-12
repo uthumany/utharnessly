@@ -5,6 +5,7 @@ import wrapAnsi from 'wrap-ansi';
 import type { ColorMode, Message, OverlayKind, PaletteItem, RuntimeSnapshot, ToolCard } from './types.js';
 import { icon, spinnerFrames } from './tui/icons.js';
 import { palette, tone } from './tui/theme.js';
+import { statusBadge } from './tui/status.js';
 
 export { getBreakpoint, getTermuxBreakpoint } from './tui/responsive.js';
 export { getColorMode, palette } from './tui/theme.js';
@@ -21,13 +22,13 @@ export function WorkspaceWarning({ colorMode }: { colorMode: ColorMode }) {
 
 function toolTone(tool: ToolCard, mode: ColorMode) { if (tool.state === 'error') return tone(palette.error, mode); if (tool.state === 'approval') return tone(palette.warning, mode); if (tool.state === 'running') return tone(palette.primary, mode); if (tool.state === 'waiting') return tone(palette.muted, mode); return tone(palette.success, mode); }
 export function ToolCardView({ tool, width, colorMode, tick = 0 }: { tool: ToolCard; width: number; colorMode: ColorMode; tick?: number }) {
-  const status = tool.state === 'running' ? `${spinnerFrames[tick % spinnerFrames.length]} Running` : tool.state === 'approval' ? '! Approval required' : tool.state === 'error' ? '✗ Error' : tool.state === 'waiting' ? '○ Waiting' : '✓ Completed';
+  const status = tool.state === 'running' ? `${spinnerFrames[tick % spinnerFrames.length]} Running` : tool.state === 'approval' ? '! Approval required' : tool.state === 'error' ? statusBadge('error', 'FAIL', colorMode) : tool.state === 'waiting' ? '○ Waiting' : statusBadge('success', 'PASS', colorMode);
   return <Box borderStyle="round" borderColor={tone(tool.state === 'running' ? palette.borderFocus : palette.border, colorMode)} paddingX={1} width={Math.max(22, Math.min(width, 82))} flexDirection="column"><Box justifyContent="space-between"><Text color={tone(palette.agent, colorMode)} bold>{tool.kind ?? 'TOOL'}  {tool.name}</Text><Text color={toolTone(tool, colorMode)}>{status}</Text></Box>{tool.state !== 'completed' && tool.detail ? <Text color={tone(palette.text, colorMode)}>{tool.detail}</Text> : null}<Text color={tone(palette.muted, colorMode)}>{tool.metric}{tool.elapsed ? `  ${tool.elapsed}` : ''}</Text></Box>;
 }
 
 const roleMeta = (role: Message['role']) => ({
-  utharness: ['UTHARNESS', palette.agent, '𓄆'], you: ['YOU', palette.primary, '○'], system: ['SYSTEM', palette.warning, '!'],
-  agent: ['AGENT', palette.error, '𓄆'], tool: ['TOOL', palette.tool, '⚙'], memory: ['MEMORY', palette.accent, '◫'], error: ['ERROR', palette.error, '✗']
+  utharness: ['UTHARNESS', palette.error, icon('agent')], you: ['YOU', palette.primary, '○'], system: ['SYSTEM', palette.warning, '!'],
+  agent: ['AGENT', palette.error, icon('agent')], tool: ['TOOL', palette.tool, icon('tool')], memory: ['MEMORY', palette.accent, icon('memory')], error: ['ERROR', palette.error, icon('failed')]
 } as const)[role];
 export function MessageRow({ message, width, colorMode, tick }: { message: Message; width: number; colorMode: ColorMode; tick: number }) {
   const [name, color, marker] = roleMeta(message.role);
@@ -52,7 +53,16 @@ export function Inspector({ snapshot, colorMode, width }: { snapshot: RuntimeSna
   return <Box width={width} borderStyle="single" borderColor={tone(palette.border, colorMode)} flexDirection="column" paddingX={1}><Text color={tone(palette.accent, colorMode)} bold>TASK  CONTEXT  AGENTS</Text><Text color={tone(palette.muted, colorMode)}>Active task</Text><Text color={tone(palette.text, colorMode)}>Idle — ready for input</Text><Text color={tone(palette.muted, colorMode)}>Provider / model</Text><Text color={tone(palette.text, colorMode)} wrap="truncate-end">{snapshot.provider}/{snapshot.model}</Text><Text color={tone(palette.muted, colorMode)}>Git</Text><Text color={tone(palette.success, colorMode)}>{snapshot.git.branch} · {snapshot.git.modified + snapshot.git.untracked} changes</Text></Box>;
 }
 
-export function Overlay({ kind, items, selected, query, width, colorMode }: { kind: Exclude<OverlayKind, null>; items: PaletteItem[]; selected: number; query: string; width: number; colorMode: ColorMode }) {
+export function Overlay({ kind, items, selected, query, width, colorMode, maxItems = 12 }: { kind: Exclude<OverlayKind, null>; items: PaletteItem[]; selected: number; query: string; width: number; colorMode: ColorMode; maxItems?: number }) {
   const title = kind.toUpperCase();
-  return <Box borderStyle="round" borderColor={tone(palette.accent, colorMode)} paddingX={1} width={Math.max(28, Math.min(width, 78))} flexDirection="column"><Box justifyContent="space-between"><Text color={tone(palette.accent, colorMode)} bold>{title}</Text><Text color={tone(palette.muted, colorMode)}>Esc close</Text></Box>{query ? <Text color={tone(palette.primary, colorMode)}>⌕ {query}</Text> : null}{items.slice(0, 12).map((item, index) => <Box key={item.id} justifyContent="space-between"><Text color={tone(index === selected ? palette.borderFocus : palette.text, colorMode)}>{index === selected ? <Text color={tone(palette.warning, colorMode)}>𓆃 </Text> : '  '}{item.label}  <Text color={tone(palette.muted, colorMode)}>{item.description}</Text></Text><Text color={tone(palette.muted, colorMode)}>{item.shortcut ?? ''}</Text></Box>)}{items.length === 0 ? <Text color={tone(palette.muted, colorMode)}>No matching items</Text> : null}<Text color={tone(palette.muted, colorMode)}>↑/↓ select · Enter open · Esc close</Text></Box>;
+  const start = Math.max(0, selected - maxItems + 1);
+  return <Box flexShrink={0} borderStyle="round" borderColor={tone(palette.accent, colorMode)} paddingX={1} width={Math.max(20, Math.min(width, 78))} flexDirection="column">
+    <Text color={tone(palette.accent, colorMode)} bold wrap="truncate-end">{title} · Esc close</Text>
+    {query ? <Text color={tone(palette.primary, colorMode)} wrap="truncate-end">⌕ {query}</Text> : null}
+    {items.slice(start, start + maxItems).map((item, index) => <Text key={item.id} wrap="truncate-end" color={tone(index + start === selected ? palette.borderFocus : palette.text, colorMode)}>
+      {index + start === selected ? <Text color={tone(palette.warning, colorMode)}>{icon('selector')} </Text> : '  '}{item.label}  <Text color={tone(palette.muted, colorMode)}>{item.description} {item.shortcut ?? ''}</Text>
+    </Text>)}
+    {items.length === 0 ? <Text color={tone(palette.muted, colorMode)}>No matching items</Text> : null}
+    <Text color={tone(palette.muted, colorMode)} wrap="truncate-end">↑/↓ select · Enter open · {items.length ? Math.min(selected + 1, items.length) : 0}/{items.length}</Text>
+  </Box>;
 }

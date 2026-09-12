@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
 import { runtimeBinary } from './runtime-binary.js';
+import { parseModelCatalog } from './setup.js';
 import type { Message, RuntimeSnapshot, ToolCard } from './types.js';
 
 const runtimeSchema = z.object({
@@ -118,7 +119,19 @@ export async function runSkillCommand(args: string[], cwd = process.cwd()): Prom
   }
 }
 
-export async function submitPrompt(prompt: string, cwd = process.cwd()): Promise<{ text: string; tool?: ToolCard }> {
+export type AgentOptions = { provider?: string; model?: string; signal?: AbortSignal };
+
+export async function runRuntimeCommand(args: string[], cwd = process.cwd(), provider?: string): Promise<string> {
+  const result = await execa(runtimeBinary(cwd), args, { cwd, reject: false, timeout: 30_000, env: provider ? { UTHARNESS_PROVIDER: provider } : {} });
+  if (result.exitCode !== 0) throw new Error(result.stderr.trim() || `Runtime command failed (${result.exitCode}).`);
+  return result.stdout.trim();
+}
+
+export async function loadModelCatalog(cwd = process.cwd(), provider?: string) {
+  return parseModelCatalog(await runRuntimeCommand(['models', 'list', '--json'], cwd, provider));
+}
+
+export async function submitPrompt(prompt: string, cwd = process.cwd(), options: AgentOptions = {}): Promise<{ text: string; tool?: ToolCard }> {
   const binary = runtimeBinary(cwd);
   try {
     await fs.access(binary);
@@ -126,8 +139,10 @@ export async function submitPrompt(prompt: string, cwd = process.cwd()): Promise
     throw new Error('Agent runtime unavailable. Reinstall UTHARNESS or set UTHARNESS_RUNTIME_BIN.');
   }
   const result = await execa(binary, ['agents', 'run', prompt, '--workspace', cwd], {
-    cwd, reject: false, timeout: 600_000,
+    cwd, reject: false, timeout: 600_000, cancelSignal: options.signal, forceKillAfterDelay: 1000,
+    env: { ...(options.provider ? { UTHARNESS_PROVIDER: options.provider } : {}), ...(options.model ? { UTHARNESS_MODEL: options.model } : {}) },
   });
+  if (options.signal?.aborted) throw new Error('Agent operation cancelled.');
   if (result.exitCode !== 0) {
     throw new Error(result.stderr.trim() || `Agent runtime exited with status ${result.exitCode}.`);
   }

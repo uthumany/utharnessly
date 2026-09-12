@@ -8,8 +8,6 @@ use std::{
     io::{self, IsTerminal},
     path::{Path, PathBuf},
     process::Command,
-    thread,
-    time::Duration,
 };
 use utharness_core::MessageRole;
 use utharness_provider::{
@@ -662,7 +660,7 @@ fn chat(args: ChatArgs) -> Result<()> {
     let response = match Gateway::from_environment() {
         Ok(provider) => {
             live = true;
-            println!("𓄆 Uthy · {}/{}", provider.provider(), provider.model());
+            println!("{} Uthy · {}/{}", agent_marker(), provider.provider(), provider.model());
             print_agent_loading()?;
             use std::io::Write;
             io::stdout().flush()?;
@@ -687,32 +685,38 @@ fn chat(args: ChatArgs) -> Result<()> {
         utharness_core::new_id(),
     )?;
     if !live {
-        println!("𓄆 Uthy · OFFLINE PLANNER\n{}", response);
+        println!("{} Uthy · OFFLINE PLANNER\n{}", agent_marker(), response);
     }
     Ok(())
 }
 
-/// Brief, terminal-safe pre-response progress for interactive live chats. It
-/// uses a carriage-returned single line, never polluting redirected output.
+fn agent_marker() -> &'static str {
+    if env::var("UTHARNESS_ICONS").as_deref() == Ok("ascii")
+        || env::var("UTHARNESS_ASCII").as_deref() == Ok("1")
+        || env::var("TERM").as_deref() == Ok("dumb")
+    {
+        "[agent]"
+    } else {
+        "𓄆"
+    }
+}
+
+/// Model inference has no measurable percentage. Report waiting without
+/// inventing completion or delaying the actual provider request.
 fn print_agent_loading() -> Result<()> {
-    if !io::stdout().is_terminal() {
+    if !io::stdout().is_terminal() || !io::stderr().is_terminal() {
         return Ok(());
     }
-    use std::io::Write;
     let colored =
         env::var_os("NO_COLOR").is_none() && env::var("TERM").is_ok_and(|term| term != "dumb");
-    for (percent, filled) in [(1, 0), (10, 1), (30, 3), (50, 5), (80, 8), (100, 10)] {
-        let bar = format!("{}{}", "█".repeat(filled), "▒".repeat(10 - filled));
-        if colored {
-            print!("\r\x1b[2K\x1b[38;2;56;189;248m𓄆 AGENT preparing response \x1b[38;2;250;204;21m{bar} {percent}%\x1b[0m");
-        } else {
-            print!("\rAGENT preparing response {bar} {percent}%");
-        }
-        io::stdout().flush()?;
-        thread::sleep(Duration::from_millis(100));
+    if colored {
+        eprintln!(
+            "\x1b[31m{}\x1b[0m Waiting for provider response…",
+            agent_marker()
+        );
+    } else {
+        eprintln!("AGENT waiting for provider response...");
     }
-    print!("\r\x1b[2K");
-    io::stdout().flush()?;
     Ok(())
 }
 

@@ -67,7 +67,7 @@ export function resolveIconMode(requested: IconMode, env: NodeJS.ProcessEnv = pr
 }
 
 const nav = [
-  ['agents', 'AGENTS', letterColors[0]], ['models', 'MODELS', letterColors[1]], ['skills', 'SKILLS', letterColors[2]],
+  ['agents', 'AGENTS', letterColors[5]], ['models', 'MODELS', letterColors[1]], ['skills', 'SKILLS', letterColors[2]],
   ['mcp', 'MCP', letterColors[3]], ['memory', 'MEMORY', letterColors[4]], ['tools', 'TOOLS', letterColors[5]], ['terminal', 'TERMINAL', letterColors[6]]
 ] as const;
 

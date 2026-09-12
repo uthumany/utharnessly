@@ -3,6 +3,9 @@ import { Box, Text, useApp, useInput, useStdout } from 'ink';
 import { execa } from 'execa';
 import { authMethods, developerTools, modes, progress, providers, recommendedTools, tools, type AuthMethod, type EnvironmentReport, type SetupMode } from './setup-data.js';
 import { runtimeBinary } from './runtime-binary.js';
+import { icon } from './tui/icons.js';
+import { statusBadge } from './tui/status.js';
+import { getColorMode } from './tui/theme.js';
 
 type Stage = 'scan' | 'mode' | 'provider' | 'custom_url' | 'auth' | 'secret' | 'model' | 'tools' | 'import' | 'review' | 'saving' | 'done' | 'error';
 type ModelCatalog = { provider: string; models: string[]; active: string };
@@ -17,7 +20,7 @@ export function parseModelCatalog(raw: string): ModelCatalog {
 }
 
 function List({ items, selected, marked }: { items: Array<{ id: string; label: string; description: string }>; selected: number; marked?: Set<string> }) {
-  return <Box flexDirection="column">{items.map((item, index) => <Text key={item.id} color={index === selected ? cyan : undefined} wrap="truncate-end">{index === selected ? <Text color={yellow}>𓆃 </Text> : '  '}{marked ? `[${marked.has(item.id) ? '●' : ' '}]` : `${index + 1}.`} <Text bold={index === selected}>{item.label}</Text> <Text color={muted}>— {item.description}</Text></Text>)}</Box>;
+  return <Box flexDirection="column">{items.map((item, index) => <Text key={item.id} color={index === selected ? cyan : undefined} wrap="truncate-end">{index === selected ? <Text color={yellow}>{icon('selector')} </Text> : '  '}{marked ? `[${marked.has(item.id) ? '●' : ' '}]` : `${index + 1}.`} <Text bold={index === selected}>{item.label}</Text> <Text color={muted}>— {item.description}</Text></Text>)}</Box>;
 }
 function Progress({ completed, total, label }: { completed: number; total: number; label: string }) {
   const value = progress(completed, total), filled = Math.round(value / 10);
@@ -113,8 +116,8 @@ export function SetupApp() {
     {stage === 'import' ? <><Text bold>▤ Import utharness.json</Text><Text color={cyan}>› {importPath}<Text inverse> </Text></Text></> : null}
     {stage === 'review' ? <Box flexDirection="column"><Text bold>Review and validate</Text><Text>Mode       <Text color={cyan}>{mode}</Text></Text><Text>Provider   <Text color={cyan}>{provider}</Text></Text><Text>Model      <Text color={cyan}>{model}</Text></Text><Text>Credential <Text color={auth === 'skip' ? yellow : green}>{mode === 'blank' ? 'not required' : auth === 'api_key' ? 'masked key ready' : auth}</Text></Text><Text>Tools      <Text color={cyan}>{(mode === 'blank' ? ['workspace_read'] : selectedTools.map(item => item.id)).join(', ')}</Text></Text><Text color={cyan}>Enter saves, validates, and prepares first chat.</Text></Box> : null}
     {stage === 'saving' ? <Box flexDirection="column"><Text color={cyan}>◇ Validating provider and model…</Text><Text color={muted}>Saving configuration only after every required check succeeds.</Text></Box> : null}
-    {stage === 'done' ? <Box flexDirection="column"><Text color={green} bold>✓ Setup complete and validated</Text><Text>Configuration, private secrets, storage, tools, and model route are ready.</Text><Text color={cyan}>Press Enter, then run `utharness` to start the first chat.</Text></Box> : null}
-    {stage === 'error' ? <Box flexDirection="column"><Text color={red} bold>! Setup needs attention</Text><Text>{error}</Text><Text color={muted}>Press Enter to return to setup.</Text></Box> : null}
+    {stage === 'done' ? <Box flexDirection="column"><Text color={green} bold>{statusBadge('success', 'PASS', getColorMode())} Setup complete and validated</Text><Text>Configuration, private secrets, storage, tools, and model route are ready.</Text><Text color={cyan}>Press Enter, then run `utharness` to start the first chat.</Text></Box> : null}
+    {stage === 'error' ? <Box flexDirection="column"><Text color={red} bold>{statusBadge('warning', 'WARN', getColorMode())} Setup needs attention</Text><Text>{error}</Text><Text color={muted}>Press Enter to return to setup.</Text></Box> : null}
     {['mode', 'provider', 'auth', 'model', 'tools'].includes(stage) ? <Text color={muted}>↑↓ navigate · {stage === 'tools' ? 'Space toggle · ' : ''}Enter select · Esc previous · Ctrl+C exit</Text> : null}
   </Box>;
 }

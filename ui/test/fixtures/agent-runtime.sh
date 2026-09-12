@@ -1,4 +1,15 @@
 #!/bin/sh
+if [ "$1" = models ] && [ "$2" = list ] && [ "$3" = --json ]; then
+  printf '{"provider":"groq","active":"groq/model-a","models":["model-b","model-a"]}\n'
+  exit 0
+fi
+if [ "$3" = wait ]; then
+  exec sleep 60
+fi
+if [ "$3" = route ]; then
+  printf '%s/%s\n' "$UTHARNESS_PROVIDER" "$UTHARNESS_MODEL"
+  exit 0
+fi
 if [ "$1" != agents ] || [ "$2" != run ]; then
   echo 'Wrong route: workspace tasks require agents run' >&2
   exit 2

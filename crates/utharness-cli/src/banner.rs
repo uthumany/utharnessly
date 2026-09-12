@@ -319,7 +319,13 @@ pub fn render_banner_with(
             let blocks = names
                 .iter()
                 .enumerate()
-                .map(|(i, name)| paint(&format!("{} {name}", glyphs[i]), i, depth))
+                .map(|(i, name)| {
+                    paint(
+                        &format!("{} {name}", glyphs[i]),
+                        if i == 0 { 5 } else { i },
+                        depth,
+                    )
+                })
                 .collect::<Vec<_>>();
             if layout == BannerLayout::Wrapped {
                 lines.push(centered_line(blocks[..4].join("  "), width));

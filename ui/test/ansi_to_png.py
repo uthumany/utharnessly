@@ -25,6 +25,8 @@ def render(path):
     screen = pyte.Screen(cols, rows)
     pyte.Stream(screen).feed(open(path, 'rb').read().decode('utf-8', errors='replace'))
     font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf', 14)
+    hieroglyph_path = '/usr/share/fonts/truetype/noto/NotoSansEgyptianHieroglyphs-Regular.ttf'
+    hieroglyph_font = ImageFont.truetype(hieroglyph_path, 12) if os.path.exists(hieroglyph_path) else font
     cw, ch = 9, 19
     image = Image.new('RGB', (cols * cw, rows * ch), (10, 13, 18))
     draw = ImageDraw.Draw(image)
@@ -34,7 +36,8 @@ def render(path):
             fg = color(cell.fg, (232, 237, 243))
             draw.rectangle((x*cw, y*ch, (x+1)*cw, (y+1)*ch), fill=bg)
             if cell.data != ' ':
-                draw.text((x*cw, y*ch-1), cell.data, font=font, fill=fg)
+                cell_font = hieroglyph_font if any(0x13000 <= ord(char) <= 0x1345f for char in cell.data) else font
+                draw.text((x*cw, y*ch-1), cell.data, font=cell_font, fill=fg)
     out = os.path.join(os.path.dirname(path), stem + '.png')
     image.save(out)
     print(out)

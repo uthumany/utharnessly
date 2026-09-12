@@ -1,6 +1,6 @@
 {
   "name": "utharnessly",
-  "version": "0.2.22",
+  "version": "0.2.23",
   "description": "Cross-platform launcher for the utharness local-first agent terminal",
   "license": "MIT",
   "private": false,
@@ -14,6 +14,7 @@
   },
   "files": [
     "bin/utharnessly.js",
+    "bin/download.js",
     "README.md",
     "LICENSE"
   ],
@@ -34,7 +35,11 @@
     "tui"
   ],
   "scripts": {
+    "test": "node --test test/*.test.mjs",
     "check": "node --check bin/utharnessly.js",
     "pack:check": "npm pack --dry-run"
+  },
+  "dependencies": {
+    "@vr_patel/tui": "1.0.0"
   }
 }

@@ -1,16 +1,15 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { createWriteStream } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pipeline } from 'node:stream/promises';
+import { download, statusBadge } from './download.js';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
-const VERSION = '0.2.22';
+const VERSION = '0.2.23';
 const REPOSITORY = 'uthumany/utharnessly';
 const BASE_URL = (process.env.UTHARNESSLY_RELEASE_BASE_URL || `https://github.com/${REPOSITORY}/releases/download/v${VERSION}`).replace(/\/$/, '');
 
@@ -27,12 +26,6 @@ function platformAsset() {
 function cacheRoot() {
   const base = process.env.XDG_CACHE_HOME || (process.platform === 'win32' ? process.env.LOCALAPPDATA : path.join(os.homedir(), '.cache')) || os.tmpdir();
   return path.join(base, 'utharnessly', VERSION);
-}
-
-async function download(url, destination) {
-  const response = await fetch(url, { redirect: 'follow' });
-  if (!response.ok || !response.body) throw new Error(`download failed (${response.status}) for ${url}`);
-  await pipeline(response.body, createWriteStream(destination));
 }
 
 async function verifyChecksum(archive, checksumFile) {
@@ -73,10 +66,11 @@ async function ensureBinary(force = false) {
   const archive = path.join(temp, asset);
   const checksums = path.join(temp, 'SHA256SUMS');
   try {
-    process.stderr.write(`Downloading utharnessly v${VERSION} (${process.platform}/${process.arch})…\n`);
+    process.stderr.write(`${statusBadge('info', 'INFO')} Downloading utharnessly v${VERSION} (${process.platform}/${process.arch})…\n`);
     await download(`${BASE_URL}/${asset}`, archive);
     await download(`${BASE_URL}/SHA256SUMS`, checksums);
     await verifyChecksum(archive, checksums);
+    process.stderr.write(`${statusBadge('success', 'PASS')} Release checksum verified\n`);
     const extracted = path.join(temp, 'extracted');
     await fs.mkdir(extracted);
     await extractArchive(archive, format, extracted);
@@ -113,7 +107,7 @@ if (args[0] === 'update') {
     const { binary } = await ensureBinary();
     run(binary, args);
   } catch (error) {
-    console.error(`utharnessly: ${error.message}`);
+    console.error(`${statusBadge('error', 'FAIL')} utharnessly: ${error.message}`);
     process.exitCode = 1;
   }
 }

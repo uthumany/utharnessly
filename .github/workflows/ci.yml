@@ -60,6 +60,8 @@ jobs:
       - name: Validate npm package
         working-directory: packages/utharnessly-npm
         run: |
+          npm ci --ignore-scripts
+          npm test
           node --check bin/utharnessly.js
           npm pack --dry-run
           expected="$(node -p "require('./package.json').version")"
