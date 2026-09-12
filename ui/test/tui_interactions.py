@@ -67,4 +67,11 @@ with tempfile.TemporaryDirectory(prefix='utharness-interactions-') as state:
         print('PASS: unknown command, live catalog selection, backend route, Ctrl+C cancellation, resize')
     finally:
         (OUT / 'audit-last-120x40.ansi').write_bytes(data)
-        os.kill(pid, signal.SIGTERM); os.waitpid(pid, 0); os.close(fd)
+        os.close(fd)
+        os.kill(pid, signal.SIGTERM)
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            if os.waitpid(pid, os.WNOHANG)[0]: break
+            time.sleep(0.05)
+        else:
+            os.kill(pid, signal.SIGKILL); os.waitpid(pid, 0)

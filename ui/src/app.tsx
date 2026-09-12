@@ -60,6 +60,13 @@ const unique = (items: Message[]) => items.filter((item, index) => items.findInd
 export function App() {
   const { exit } = useApp();
   const { stdout } = useStdout();
+  const [, setResizeRevision] = useState(0);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const resized = () => { clearTimeout(timer); timer = setTimeout(() => setResizeRevision(value => value + 1), 50); };
+    stdout.on('resize', resized);
+    return () => { clearTimeout(timer); stdout.off('resize', resized); };
+  }, [stdout]);
   const [snapshot, setSnapshot] = useState<RuntimeSnapshot | null>(null);
   const [modelItems, setModelItems] = useState<PaletteItem[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);

@@ -4,6 +4,13 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.24] — 2026-09-13
+
+- Add an explicit debounced terminal resize subscription so an idle TUI redraws without an unrelated state update.
+- Preserve selected model telemetry during late status loads and validate it after resize.
+- Bound PTY test cleanup so a failed assertion cannot hang on a full terminal output buffer.
+- Supersedes 0.2.23, whose release build was stopped before npm/PyPI publication.
+
 ## [0.2.23] — 2026-09-13
 
 ### Fixed

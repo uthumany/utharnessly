@@ -40,6 +40,11 @@ jobs:
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - run: cargo test --workspace
       - run: cargo build --release
+      - name: Exercise Linux terminal interactions and native streaming
+        if: runner.os == 'Linux'
+        run: |
+          python3 ui/test/tui_interactions.py
+          python3 ui/test/native_waiting.py
       - name: Validate platform installer syntax
         shell: bash
         run: |
