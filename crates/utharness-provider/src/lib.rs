@@ -43,6 +43,7 @@ pub enum ProviderKind {
     OvhCloud,
     Mimo,
     TeamoRouter,
+    Perplexity,
     Custom,
 }
 
@@ -432,6 +433,20 @@ const PROVIDERS: &[ProviderDef] = &[
         extra_env: None,
         detect: true,
     },
+    // Perplexity splits its API surface: models live under /v1/models
+    // but chat is POST /chat/completions, so the base omits /v1 and
+    // models_url() below re-adds it. Default `sonar` is the stable
+    // flagship alias; key validity proven by 401-vs-404 semantics.
+    ProviderDef {
+        kind: ProviderKind::Perplexity,
+        id: "perplexity",
+        aliases: &["pplx"],
+        default_url: "https://api.perplexity.ai",
+        default_model: "sonar",
+        key_var: Some("PERPLEXITY_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
     ProviderDef {
         kind: ProviderKind::Custom,
         id: "custom",
@@ -639,7 +654,9 @@ impl Gateway {
         &self.base_url
     }
     fn models_url(&self) -> String {
-        if self.kind == ProviderKind::OllamaCloud {
+        // Ollama Cloud and Perplexity serve the model catalog under a
+        // /v1/models path that is not suffix-appendable to their base.
+        if self.kind == ProviderKind::OllamaCloud || self.kind == ProviderKind::Perplexity {
             format!("{}/v1/models", self.base_url)
         } else {
             format!("{}/models", self.base_url)
