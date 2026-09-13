@@ -19,6 +19,12 @@ test('setup exposes only runtime-backed providers and capabilities', () => {
   assert.ok(providers.some(item => item.id === 'nvidia' && item.key === 'NVIDIA_API_KEY'));
   assert.equal(providers.find(item => item.id === 'groq')?.model, 'groq/compound-mini');
   assert.ok(providers.every(item => item.id !== 'anthropic'));
+  assert.ok(providers.length >= 30, `setup menu lists ${providers.length} providers`);
+  assert.deepEqual(new Set(providers.map(item => item.id)).size, providers.length);
+  assert.ok(providers.every(item => item.id && item.label && item.description && item.model));
+  for (const id of ['mistral', 'cerebras', 'cohere', 'cometapi', 'cloudflare', 'ollama-cloud', 'seekai', 'xai', 'gemini', 'perplexity', 'huggingface']) {
+    assert.ok(providers.some(item => item.id === id), `setup menu missing ${id}`);
+  }
   assert.ok(tools.every(item => item.risk === 'safe' || item.risk === 'ask'));
   assert.ok(recommendedTools.every(id => tools.some(item => item.id === id)));
   assert.deepEqual(authMethods.map(item => item.id), ['api_key', 'oauth', 'environment', 'skip']);
