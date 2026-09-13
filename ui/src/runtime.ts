@@ -131,7 +131,7 @@ export async function loadModelCatalog(cwd = process.cwd(), provider?: string) {
   return parseModelCatalog(await runRuntimeCommand(['models', 'list', '--json'], cwd, provider));
 }
 
-export async function submitPrompt(prompt: string, cwd = process.cwd(), options: AgentOptions = {}): Promise<{ text: string; tool?: ToolCard }> {
+export async function submitAgent(prompt: string, cwd = process.cwd(), options: AgentOptions = {}): Promise<{ text: string; tool?: ToolCard }> {
   const binary = runtimeBinary(cwd);
   try {
     await fs.access(binary);
@@ -148,6 +148,34 @@ export async function submitPrompt(prompt: string, cwd = process.cwd(), options:
   }
   const text = result.stdout.trim();
   if (!text) throw new Error('Agent runtime completed without output.');
+  return { text };
+}
+
+/** Backwards-compatible alias: plain submission used to mean the agent. */
+export const submitPrompt = submitAgent;
+
+/** Conversational turn: plain composer text chats with the model instead
+ *  of running a workspace inspection. Strips the `Uthy · provider/model`
+ *  header line the CLI prints above the streamed reply. */
+export async function submitChat(prompt: string, cwd = process.cwd(), options: AgentOptions = {}): Promise<{ text: string }> {
+  const binary = runtimeBinary(cwd);
+  try {
+    await fs.access(binary);
+  } catch {
+    throw new Error('Chat runtime unavailable. Reinstall UTHARNESS or set UTHARNESS_RUNTIME_BIN.');
+  }
+  const result = await execa(binary, ['chat', prompt], {
+    cwd, reject: false, timeout: 120_000, cancelSignal: options.signal, forceKillAfterDelay: 1000,
+    env: { ...(options.provider ? { UTHARNESS_PROVIDER: options.provider } : {}), ...(options.model ? { UTHARNESS_MODEL: options.model } : {}) },
+  });
+  if (options.signal?.aborted) throw new Error('Chat operation cancelled.');
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr.trim() || `Chat runtime exited with status ${result.exitCode}.`);
+  }
+  const lines = result.stdout.trim().split('\n');
+  if (lines.length && lines[0]?.includes('Uthy ·')) lines.shift();
+  const text = lines.join('\n').trim();
+  if (!text) throw new Error('Chat runtime completed without output.');
   return { text };
 }
 

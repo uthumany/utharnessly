@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useApp, useInput, useStdout } from 'ink';
 import type { FSWatcher } from 'chokidar';
 import { bannerHeight, Inspector, MessageRow, Navigation, Overlay, palette, PersistentHeader, StartupTips, StatusBar, WorkspaceWarning } from './components.js';
-import { loadSnapshot, loadModelCatalog, runRuntimeCommand, submitPrompt, watchRuntime } from './runtime.js';
-import { localCommandArgs } from './commands.js';
+import { loadSnapshot, loadModelCatalog, runRuntimeCommand, submitAgent, submitChat, watchRuntime } from './runtime.js';
+import { localCommandArgs, routePrompt } from './commands.js';
 import { Composer } from './tui/composer.js';
 import { transcriptPages } from './tui/transcript.js';
 import { icon } from './tui/icons.js';
@@ -16,6 +16,7 @@ import type { Message, OverlayKind, PaletteItem, PersistedUiState, RuntimeSnapsh
 const commands: PaletteItem[] = [
   { id: 'help', label: '/help', description: 'keyboard and command help', shortcut: 'F1', overlay: 'help' },
   { id: 'new', label: '/new', description: 'start a new local session', command: '/new' },
+  { id: 'agent', label: '/agent', description: 'run the bounded workspace agent on a task', command: '/agent' },
   { id: 'resume', label: '/resume', description: 'list saved sessions (CLI chat --session to resume)', command: '/resume' },
   { id: 'model', label: '/model', description: 'choose the active model', shortcut: 'Ctrl+P', overlay: 'models' },
   { id: 'provider', label: '/provider', description: 'inspect provider route', command: '/provider' },
@@ -181,7 +182,12 @@ export function App() {
   const send = (value: string) => {
     const prompt = value.trim();
     if (!prompt || streaming) return;
-    if (runLocalCommand(prompt)) { setDraft(''); return; }
+    let effective = prompt, useAgent = false;
+    if (routePrompt(prompt) === 'agent') {
+      effective = prompt.replace(/^\/agent\s+/, '');
+      if (!effective) { reportError('Usage: /agent TASK — run the bounded workspace agent. Plain text chats.'); setDraft(''); return; }
+      useAgent = true;
+    } else if (runLocalCommand(prompt)) { setDraft(''); return; }
     setUi(current => ({ ...current, draft: '', history: [...current.history.filter(item => item !== prompt), prompt].slice(-50) }));
     setHistoryIndex(-1);
     const userMessage: Message = { id: `${Date.now()}-user`, role: 'you', text: prompt, time: now() };
@@ -190,7 +196,8 @@ export function App() {
     setStreaming(true);
     const controller = new AbortController();
     activeRequest.current = controller;
-    void submitPrompt(prompt, process.cwd(), { provider: ui.selectedProvider ?? snapshot?.provider, model: ui.selectedModel ?? snapshot?.model, signal: controller.signal }).then(response => {
+    const backend = useAgent ? submitAgent(effective, process.cwd(), { provider: ui.selectedProvider ?? snapshot?.provider, model: ui.selectedModel ?? snapshot?.model, signal: controller.signal }) : submitChat(effective, process.cwd(), { provider: ui.selectedProvider ?? snapshot?.provider, model: ui.selectedModel ?? snapshot?.model, signal: controller.signal });
+    void backend.then(response => {
       if (controller.signal.aborted) return;
       const id = `${Date.now()}-assistant`;
       setMessages(current => unique([...current, { id, role: 'utharness', text: response.text, time: now(), tool: response.tool }]));

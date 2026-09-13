@@ -16,3 +16,14 @@ export function localCommandArgs(prompt: string): string[] {
     default: throw new Error(`Unknown command: ${command}. Use /help or Ctrl+K.`);
   }
 }
+
+/** Decide how composer input reaches the backend: slash commands run
+ *  locally, `/agent TASK` runs the bounded workspace agent, and plain
+ *  text chats with the model. */
+export type PromptRoute = 'local' | 'agent' | 'chat';
+export function routePrompt(prompt: string): PromptRoute {
+  const trimmed = prompt.trim();
+  if (trimmed === '/agent' || trimmed.startsWith('/agent ')) return 'agent';
+  if (trimmed.startsWith('/')) return 'local';
+  return 'chat';
+}

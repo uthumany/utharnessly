@@ -10,3 +10,14 @@ test('local commands keep multiword arguments and reject unknown slash commands'
   assert.deepEqual(implementation.localCommandArgs('/tools'), ['tools']);
   assert.throws(() => implementation.localCommandArgs('/not-a-command'), /Unknown command/);
 });
+
+test('composer input routes slash commands, agent tasks, and plain chat', async () => {
+  const implementation = await import('../src/commands.js').catch(() => null);
+  assert.ok(implementation, 'Prompt routing needs a deterministic route');
+  assert.equal(implementation.routePrompt('/agent inspect the repo'), 'agent');
+  assert.equal(implementation.routePrompt('/agent'), 'agent');
+  assert.equal(implementation.routePrompt('/model'), 'local');
+  assert.equal(implementation.routePrompt('/unknown-thing'), 'local');
+  assert.equal(implementation.routePrompt('hey'), 'chat');
+  assert.equal(implementation.routePrompt('  hey  '), 'chat');
+});

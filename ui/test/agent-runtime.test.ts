@@ -58,6 +58,21 @@ test('aborting a task terminates the backend and reports cancellation', { skip: 
   }
 });
 
+test('plain text chats instead of running a workspace inspection', { skip: process.platform === 'win32' }, async () => {
+  const original = process.env.UTHARNESS_RUNTIME_BIN;
+  const fixture = fileURLToPath(new URL('./fixtures/agent-runtime.sh', import.meta.url));
+  await fs.chmod(fixture, 0o755);
+  process.env.UTHARNESS_RUNTIME_BIN = fixture;
+  try {
+    const response = await runtime.submitChat('hey');
+    assert.equal(response.text, 'Hello there.');
+    await assert.rejects(runtime.submitChat('fail'), /HTTP 401/);
+  } finally {
+    if (original === undefined) delete process.env.UTHARNESS_RUNTIME_BIN;
+    else process.env.UTHARNESS_RUNTIME_BIN = original;
+  }
+});
+
 test('model picker loads provider models instead of fixed OpenAI choices', { skip: process.platform === 'win32' }, async () => {
   assert.equal(typeof runtime.loadModelCatalog, 'function');
   const original = process.env.UTHARNESS_RUNTIME_BIN;
