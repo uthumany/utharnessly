@@ -788,7 +788,7 @@ fn autonomous(args: AutonomousArgs) -> Result<()> {
     };
     let max_steps = args.max_steps.clamp(1, 8);
     let planner_prompt = format!(
-        "You are the Utharness autonomous planner. Return only valid JSON with this shape: {{\"summary\":\"short summary\",\"steps\":[{{\"tool\":\"list_directory|read_file|git_status|git_diff\",\"target\":\"relative path or null\",\"rationale\":\"short reason\"}}],\"final_response\":\"short completion note\"}}. Plan at most {max_steps} read-only steps. Never request shell, write, network, secrets, or paths outside the workspace. Candidate skills from the local registry: {recommended_names}. Loaded skill evidence: {}. Task: {}",
+        "You are the Utharness autonomous planner. Return only valid JSON with this shape: {{\"summary\":\"short summary\",\"steps\":[{{\"tool\":\"list_directory|read_file|git_status|git_diff\",\"target\":\"relative path or null\",\"rationale\":\"short reason\"}}],\"final_response\":\"short completion note describing only what the executed steps achieve; never claim files were created\"}}. Plan at most {max_steps} read-only steps. Never request shell, write, network, secrets, or paths outside the workspace. Candidate skills from the local registry: {recommended_names}. Loaded skill evidence: {}. Task: {}",
         skill_evidence.join("; "),
         args.prompt
     );
@@ -826,11 +826,13 @@ fn autonomous(args: AutonomousArgs) -> Result<()> {
 
     let policy = Policy::safe(root.clone());
     let mut completed = 0usize;
+    let mut denied: Vec<String> = Vec::new();
     let mut results = Vec::new();
     for (index, step) in plan.steps.into_iter().take(max_steps).enumerate() {
         if !autonomous_tool_enabled(&step.tool) {
             println!("{:02} {} · Deny", index + 1, step.tool);
             println!("   disabled by utharness.json capability selection");
+            denied.push(format!("{} (disabled capability)", step.tool));
             continue;
         }
         let request = utharness_core::ToolRequest {
@@ -842,6 +844,7 @@ fn autonomous(args: AutonomousArgs) -> Result<()> {
         println!("{:02} {} · {:?}", index + 1, step.tool, decision);
         if decision != utharness_core::PermissionDecision::Allow {
             println!("   denied by SAFE policy");
+            denied.push(format!("{} (SAFE policy)", step.tool));
             continue;
         }
         let output = execute_autonomous_step(&policy, &root, &step)?;
@@ -859,16 +862,30 @@ fn autonomous(args: AutonomousArgs) -> Result<()> {
         results.push(safe_output);
         completed += 1;
     }
-    let completion = format!(
-        "{} Completed {completed} approved read-only step(s). {}",
-        plan.final_response
-            .unwrap_or_else(|| "Workspace inspection finished.".into()),
-        if results.is_empty() {
-            "No tool output was returned."
+    // Never present the planner's model-written final_response as fact when
+    // nothing executed: it routinely claims artifacts were created.
+    let completion = if completed == 0 {
+        if denied.is_empty() {
+            "Task not completed: the planner returned no executable steps. No files were created or modified.".to_string()
         } else {
-            "Results were persisted to the session event log."
+            format!(
+                "Task not completed: {} planned step(s) denied ({}). The agent is read-only and the workspace capability selection does not allow the requested tools. Re-run `utharness setup` to enable capabilities or set UTHARNESS_TOOLS; no files were created or modified.",
+                denied.len(),
+                denied.join(", ")
+            )
         }
-    );
+    } else {
+        format!(
+            "{} Completed {completed} approved read-only step(s). {}",
+            plan.final_response
+                .unwrap_or_else(|| "Workspace inspection finished.".into()),
+            if results.is_empty() {
+                "No tool output was returned."
+            } else {
+                "Results were persisted to the session event log."
+            }
+        )
+    };
     app.storage
         .append_message(session.id, MessageRole::Assistant, &completion)?;
     app.storage.record_event(
