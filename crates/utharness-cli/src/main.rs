@@ -279,10 +279,16 @@ enum MemoryAction {
         content: String,
         #[arg(long, default_value = "project")]
         scope: String,
+        #[arg(long, default_value = "note")]
+        kind: String,
+        /// Retention like `24h`, `7d`, `30d`; empty means never expires.
+        #[arg(long, default_value = "")]
+        expires: String,
     },
     Search {
         query: String,
     },
+    Prune,
 }
 
 #[derive(Args, Debug)]
@@ -660,6 +666,12 @@ fn chat(args: ChatArgs) -> Result<()> {
     app.storage
         .append_message(session.id, MessageRole::User, &args.prompt)?;
     let mut live = false;
+    let memories = recall_block(&app.storage, app.workspace.id, &args.prompt);
+    let system = if memories.is_empty() {
+        "You are Uthy, a concise terminal coding agent. Never claim a command ran unless a tool result proves it.".to_string()
+    } else {
+        format!("You are Uthy, a concise terminal coding agent. Never claim a command ran unless a tool result proves it.\n{memories}")
+    };
     let response = match Gateway::from_environment() {
         Ok(provider) => {
             live = true;
@@ -668,7 +680,7 @@ fn chat(args: ChatArgs) -> Result<()> {
             use std::io::Write;
             io::stdout().flush()?;
             let response = provider.complete_streaming(
-                &[ChatMessage { role: "system".into(), content: "You are Uthy, a concise terminal coding agent. Never claim a command ran unless a tool result proves it.".into() }, ChatMessage { role: "user".into(), content: args.prompt.clone() }],
+                &[ChatMessage { role: "system".into(), content: system }, ChatMessage { role: "user".into(), content: args.prompt.clone() }],
                 |delta| { print!("{delta}"); io::stdout().flush()?; Ok(()) },
             )?;
             println!();
@@ -787,8 +799,9 @@ fn autonomous(args: AutonomousArgs) -> Result<()> {
         }
     };
     let max_steps = args.max_steps.clamp(1, 8);
+    let memories = recall_block(&app.storage, app.workspace.id, &args.prompt);
     let planner_prompt = format!(
-        "You are the Utharness autonomous planner. Return only valid JSON with this shape: {{\"summary\":\"short summary\",\"steps\":[{{\"tool\":\"list_directory|read_file|git_status|git_diff\",\"target\":\"relative path or null\",\"rationale\":\"short reason\"}}],\"final_response\":\"short completion note describing only what the executed steps achieve; never claim files were created\"}}. Plan at most {max_steps} read-only steps. Never request shell, write, network, secrets, or paths outside the workspace. Candidate skills from the local registry: {recommended_names}. Loaded skill evidence: {}. Task: {}",
+        "You are the Utharness autonomous planner. Return only valid JSON with this shape: {{\"summary\":\"short summary\",\"steps\":[{{\"tool\":\"list_directory|read_file|git_status|git_diff\",\"target\":\"relative path or null\",\"rationale\":\"short reason\"}}],\"final_response\":\"short completion note describing only what the executed steps achieve; never claim files were created\"}}. Plan at most {max_steps} read-only steps. Never request shell, write, network, secrets, or paths outside the workspace. {memories}Candidate skills from the local registry: {recommended_names}. Loaded skill evidence: {}. Task: {}",
         skill_evidence.join("; "),
         args.prompt
     );
@@ -895,6 +908,27 @@ fn autonomous(args: AutonomousArgs) -> Result<()> {
         &json!({"model": provider.model(), "completed_steps": completed, "max_steps": max_steps}),
         utharness_core::new_id(),
     )?;
+    // Episodic auto-capture: successful runs leave a short trace so future
+    // tasks recall what was done here. Best-effort; never fails the run.
+    if completed > 0 {
+        let first_line: String = completion
+            .lines()
+            .next()
+            .unwrap_or("")
+            .chars()
+            .take(200)
+            .collect();
+        let task: String = args.prompt.chars().take(200).collect();
+        let _ = app.storage.add_memory(
+            Some(app.workspace.id),
+            Some(session.id),
+            "task",
+            "episode",
+            &format!("Task: {task} — {completed}/{max_steps} steps. {first_line}"),
+            "agent",
+            None,
+        );
+    }
     println!();
     println!("AGENT RESULT");
     println!("{}", Policy::redact(&completion));
@@ -1001,14 +1035,21 @@ fn memory(action: MemoryAction) -> Result<()> {
             println!("workspace: {}", app.workspace.canonical_path);
             println!("Use `utharness memory search <query>` to search persisted records.");
         }
-        MemoryAction::Add { content, scope } => {
+        MemoryAction::Add {
+            content,
+            scope,
+            kind,
+            expires,
+        } => {
+            let expires_at = parse_expiry(&expires)?;
             let memory = app.storage.add_memory(
                 Some(app.workspace.id),
                 None,
                 &scope,
-                "note",
+                &kind,
                 &content,
                 "cli",
+                expires_at,
             )?;
             println!("stored memory {} [{}]", memory.id, memory.scope);
         }
@@ -1021,8 +1062,59 @@ fn memory(action: MemoryAction) -> Result<()> {
                 println!("[{}] {} · {}", item.scope, item.content, item.source);
             }
         }
+        MemoryAction::Prune => {
+            let (expired, duplicates) = app.storage.prune_memories(Some(app.workspace.id))?;
+            println!("pruned {expired} expired and {duplicates} duplicate memories");
+        }
     }
     Ok(())
+}
+
+/// Parse retention flags like `24h`, `7d`, `30d` into absolute epoch ms.
+/// Empty or `never` means no expiry. Rejects anything else loudly.
+fn parse_expiry(value: &str) -> Result<Option<i64>> {
+    let trimmed = value.trim().to_ascii_lowercase();
+    if trimmed.is_empty() || trimmed == "never" {
+        return Ok(None);
+    }
+    let (digits, factor) = if let Some(days) = trimmed.strip_suffix('d') {
+        (days, 86_400_000i64)
+    } else if let Some(hours) = trimmed.strip_suffix('h') {
+        (hours, 3_600_000i64)
+    } else {
+        anyhow::bail!("invalid --expires value '{value}'; use like 24h, 7d, or never");
+    };
+    let amount: i64 = digits.parse().map_err(|_| {
+        anyhow::anyhow!("invalid --expires value '{value}'; use like 24h, 7d, or never")
+    })?;
+    if amount <= 0 {
+        anyhow::bail!("invalid --expires value '{value}'; use like 24h, 7d, or never");
+    }
+    Ok(Some(
+        utharness_core::now_ms().saturating_add(amount.saturating_mul(factor)),
+    ))
+}
+
+/// Memories relevant to a prompt, rendered for injection into model
+/// context. Capped in size; empty when nothing recalls. Never fails.
+fn recall_block(
+    storage: &utharness_storage::Storage,
+    workspace: utharness_core::Id,
+    query: &str,
+) -> String {
+    let hits = storage.recall(Some(workspace), query, 3);
+    if hits.is_empty() {
+        return String::new();
+    }
+    let mut block = String::from("Relevant workspace memories:\n");
+    for hit in hits {
+        let line: String = hit.content.chars().take(200).collect();
+        block.push_str(&format!("- [{}] {}\n", hit.kind, line));
+        if block.len() > 800 {
+            break;
+        }
+    }
+    block
 }
 
 fn checkpoint() -> Result<()> {

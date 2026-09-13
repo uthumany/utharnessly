@@ -9,6 +9,35 @@ use utharness_core::{
 
 const MIGRATION: &str = include_str!("../../../migrations/0001_initial.sql");
 
+fn migrate(conn: &Connection) -> Result<()> {
+    let version: i64 = conn
+        .query_row(
+            "SELECT value FROM app_meta WHERE key = 'schema_version'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1);
+    if version < 2 {
+        // ADD COLUMN is not idempotent in SQLite; tolerate databases that
+        // already carry the column from an interrupted earlier migration.
+        let already = conn
+            .prepare(
+                "SELECT COUNT(*) FROM pragma_table_info('memories') WHERE name = 'expires_at'",
+            )?
+            .query_row([], |row| row.get::<_, i64>(0))?;
+        if already == 0 {
+            conn.execute("ALTER TABLE memories ADD COLUMN expires_at INTEGER", [])?;
+        }
+        conn.execute(
+            "INSERT INTO app_meta(key, value, updated_at) VALUES ('schema_version', '2', ?1) ON CONFLICT(key) DO UPDATE SET value = '2', updated_at = ?1",
+            params![now_ms()],
+        )?;
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug)]
 pub struct Storage {
     path: PathBuf,
@@ -23,6 +52,7 @@ impl Storage {
             conn.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000; PRAGMA trusted_schema = OFF;")?;
             conn.execute_batch(MIGRATION)?;
             conn.execute("INSERT OR IGNORE INTO app_meta(key, value, updated_at) VALUES ('schema_version', '1', ?1)", params![now_ms()])?;
+            migrate(conn)?;
             Ok(())
         })?;
         Ok(storage)
@@ -163,6 +193,7 @@ impl Storage {
         kind: &str,
         content: &str,
         source: &str,
+        expires_at: Option<i64>,
     ) -> Result<MemoryRecord> {
         let memory = MemoryRecord {
             id: new_id(),
@@ -178,8 +209,27 @@ impl Storage {
             updated_at: now_ms(),
         };
         self.with_connection(|conn| {
-            conn.execute("INSERT INTO memories(id, workspace_id, session_id, scope, kind, content, source, importance, metadata_json, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)", params![memory.id.to_string(), memory.workspace_id.map(|v| v.to_string()), memory.session_id.map(|v| v.to_string()), memory.scope, memory.kind, memory.content, memory.source, memory.importance, memory.metadata.to_string(), memory.created_at, memory.updated_at])?;
+            conn.execute("INSERT INTO memories(id, workspace_id, session_id, scope, kind, content, source, importance, metadata_json, created_at, updated_at, expires_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)", params![memory.id.to_string(), memory.workspace_id.map(|v| v.to_string()), memory.session_id.map(|v| v.to_string()), memory.scope, memory.kind, memory.content, memory.source, memory.importance, memory.metadata.to_string(), memory.created_at, memory.updated_at, expires_at])?;
             Ok(memory)
+        })
+    }
+
+    /// Remove expired memories and exact-duplicate contents (keeping the
+    /// newest of each duplicate set). Returns (expired, duplicates).
+    /// FTS rows stay consistent through the existing delete triggers.
+    pub fn prune_memories(&self, workspace_id: Option<Id>) -> Result<(usize, usize)> {
+        let now = now_ms();
+        let ws = workspace_id.map(|v| v.to_string());
+        self.with_connection(|conn| {
+            let expired = conn.execute(
+                "DELETE FROM memories WHERE deleted_at IS NULL AND expires_at IS NOT NULL AND expires_at <= ?1 AND (?2 IS NULL OR workspace_id = ?2)",
+                params![now, ws],
+            )?;
+            let duplicates = conn.execute(
+                "DELETE FROM memories WHERE rowid NOT IN (SELECT MAX(rowid) FROM memories WHERE deleted_at IS NULL GROUP BY workspace_id, scope, content) AND deleted_at IS NULL AND (?1 IS NULL OR workspace_id = ?1)",
+                params![ws],
+            )?;
+            Ok((expired, duplicates))
         })
     }
 
@@ -188,11 +238,27 @@ impl Storage {
         workspace_id: Option<Id>,
         query: &str,
     ) -> Result<Vec<MemoryRecord>> {
+        // Expired memories never surface, even on exact matches.
+        let now = now_ms();
         self.with_connection(|conn| {
-            let mut stmt = conn.prepare("SELECT m.id, m.workspace_id, m.session_id, m.scope, m.kind, m.content, m.source, m.importance, m.metadata_json, m.created_at, m.updated_at FROM memory_fts f JOIN memories m ON m.rowid = f.rowid WHERE f.memory_fts MATCH ?1 AND (?2 IS NULL OR m.workspace_id = ?2) AND m.deleted_at IS NULL ORDER BY bm25(memory_fts) LIMIT 20")?;
-            let rows = stmt.query_map(params![query, workspace_id.map(|v| v.to_string())], |row| Ok(MemoryRecord { id: parse_id(row.get::<_, String>(0)?)?, workspace_id: row.get::<_, Option<String>>(1)?.map(parse_id).transpose()?, session_id: row.get::<_, Option<String>>(2)?.map(parse_id).transpose()?, scope: row.get(3)?, kind: row.get(4)?, content: row.get(5)?, source: row.get(6)?, importance: row.get(7)?, metadata: serde_json::from_str(&row.get::<_, String>(8)?).unwrap_or(Value::Object(Default::default())), created_at: row.get(9)?, updated_at: row.get(10)? }))?;
+            let mut stmt = conn.prepare("SELECT m.id, m.workspace_id, m.session_id, m.scope, m.kind, m.content, m.source, m.importance, m.metadata_json, m.created_at, m.updated_at FROM memory_fts f JOIN memories m ON m.rowid = f.rowid WHERE f.memory_fts MATCH ?1 AND (?2 IS NULL OR m.workspace_id = ?2) AND m.deleted_at IS NULL AND (m.expires_at IS NULL OR m.expires_at > ?3) ORDER BY bm25(memory_fts) LIMIT 20")?;
+            let rows = stmt.query_map(params![query, workspace_id.map(|v| v.to_string()), now], |row| Ok(MemoryRecord { id: parse_id(row.get::<_, String>(0)?)?, workspace_id: row.get::<_, Option<String>>(1)?.map(parse_id).transpose()?, session_id: row.get::<_, Option<String>>(2)?.map(parse_id).transpose()?, scope: row.get(3)?, kind: row.get(4)?, content: row.get(5)?, source: row.get(6)?, importance: row.get(7)?, metadata: serde_json::from_str(&row.get::<_, String>(8)?).unwrap_or(Value::Object(Default::default())), created_at: row.get(9)?, updated_at: row.get(10)? }))?;
             Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
         })
+    }
+
+    /// Recall helper for prompt injection: top hits, most important first,
+    /// expired records excluded. Never fails the caller: empty on no match.
+    pub fn recall(&self, workspace_id: Option<Id>, query: &str, limit: usize) -> Vec<MemoryRecord> {
+        let mut hits = self.search_memory(workspace_id, query).unwrap_or_default();
+        hits.sort_by(|a, b| {
+            b.importance
+                .partial_cmp(&a.importance)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| b.updated_at.cmp(&a.updated_at))
+        });
+        hits.truncate(limit.min(10));
+        hits
     }
 
     pub fn create_checkpoint(
@@ -332,6 +398,7 @@ mod tests {
             "note",
             "Authentication uses ASK mode",
             "test",
+            None,
         )?;
         assert_eq!(db.messages(session.id)?.len(), 1);
         assert_eq!(
@@ -339,6 +406,53 @@ mod tests {
                 .len(),
             1
         );
+        assert_eq!(db.integrity_check()?, "ok");
+        Ok(())
+    }
+
+    #[test]
+    fn expired_memories_stay_hidden_and_prune_clears_them() -> Result<()> {
+        let dir = tempdir()?;
+        let db = Storage::open(dir.path().join("state.db"))?;
+        let workspace = db.ensure_workspace(dir.path())?;
+        let past = now_ms() - 1_000;
+        let future = now_ms() + 86_400_000;
+        db.add_memory(
+            Some(workspace.id),
+            None,
+            "project",
+            "note",
+            "temporary token",
+            "test",
+            Some(past),
+        )?;
+        db.add_memory(
+            Some(workspace.id),
+            None,
+            "project",
+            "note",
+            "durable policy",
+            "test",
+            Some(future),
+        )?;
+        db.add_memory(
+            Some(workspace.id),
+            None,
+            "project",
+            "note",
+            "durable policy",
+            "test",
+            None,
+        )?;
+        // Expired record is invisible to search even on exact terms.
+        assert!(db
+            .search_memory(Some(workspace.id), "temporary")?
+            .is_empty());
+        assert_eq!(db.search_memory(Some(workspace.id), "durable")?.len(), 2);
+        let (expired, duplicates) = db.prune_memories(Some(workspace.id))?;
+        assert_eq!(expired, 1);
+        assert_eq!(duplicates, 1);
+        assert_eq!(db.search_memory(Some(workspace.id), "durable")?.len(), 1);
         assert_eq!(db.integrity_check()?, "ok");
         Ok(())
     }

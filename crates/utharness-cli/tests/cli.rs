@@ -215,6 +215,45 @@ fn termux_commands_create_no_root_paths_and_report_optional_features() {
 }
 
 #[test]
+fn memory_supports_kinds_expiry_and_prune() {
+    let workspace = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    let bin = env!("CARGO_BIN_EXE_utharness");
+
+    let added = run(
+        bin,
+        workspace.path(),
+        home.path(),
+        &[
+            "memory",
+            "add",
+            "Prune test note",
+            "--kind",
+            "fact",
+            "--expires",
+            "7d",
+        ],
+    );
+    assert!(added.contains("stored memory"));
+    let added_again = run(
+        bin,
+        workspace.path(),
+        home.path(),
+        &["memory", "add", "Prune test note", "--kind", "fact"],
+    );
+    assert!(added_again.contains("stored memory"));
+    let pruned = run(bin, workspace.path(), home.path(), &["memory", "prune"]);
+    assert!(pruned.contains("pruned 0 expired and 1 duplicate"));
+    let search = run(
+        bin,
+        workspace.path(),
+        home.path(),
+        &["memory", "search", "prune"],
+    );
+    assert!(search.contains("Prune test note"));
+}
+
+#[test]
 fn cli_persists_workspace_session_memory_and_doctor() {
     let workspace = tempdir().unwrap();
     let home = tempdir().unwrap();

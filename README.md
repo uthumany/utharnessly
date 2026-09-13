@@ -164,6 +164,7 @@ utharness sessions list            List persisted sessions
 utharness sessions new TITLE       Create a session
 utharness memory add CONTENT       Store workspace memory
 utharness memory search QUERY      Search indexed memory
+utharness memory prune             Drop expired and duplicate memories
 utharness checkpoint               Create a session checkpoint
 utharness skills                   List the indexed Skill Registry
 utharness skills search QUERY      Search ranked skill metadata
