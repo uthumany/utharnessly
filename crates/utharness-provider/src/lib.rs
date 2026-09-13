@@ -44,6 +44,7 @@ pub enum ProviderKind {
     Mimo,
     TeamoRouter,
     Perplexity,
+    Gemini,
     Custom,
 }
 
@@ -444,6 +445,19 @@ const PROVIDERS: &[ProviderDef] = &[
         default_url: "https://api.perplexity.ai",
         default_model: "sonar",
         key_var: Some("PERPLEXITY_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    // Gemini's OpenAI-compatible surface validates Bearer keys: bogus
+    // credentials reach key validation (400 INVALID_ARGUMENT) instead
+    // of NOT_FOUND, for both /models and /chat/completions.
+    ProviderDef {
+        kind: ProviderKind::Gemini,
+        id: "gemini",
+        aliases: &["google", "google-ai"],
+        default_url: "https://generativelanguage.googleapis.com/v1beta/openai",
+        default_model: "gemini-2.5-flash",
+        key_var: Some("GEMINI_API_KEY"),
         extra_env: None,
         detect: true,
     },
