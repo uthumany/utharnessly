@@ -38,9 +38,15 @@ The supported provider identifiers and credential variables are:
 | Ollama | `ollama` | None | `http://127.0.0.1:11434/v1` |
 | Ollama Cloud | `ollama-cloud` | `OLLAMA_API_KEY` | `https://api.ollama.com` (models via `/v1/models`, chat via native `/api/chat`) |
 | SeekAI | `seekai` | `SEEKAI_API_KEY` | `https://seekai.cc/v1` |
+| xAI | `xai` | `XAI_API_KEY` | `https://api.x.ai/v1` |
+| Nebius | `nebius` | `NEBIUS_API_KEY` | `https://api.studio.nebius.com/v1` |
+| Moonshot | `moonshot` | `MOONSHOT_API_KEY` | `https://api.moonshot.ai/v1` |
+| MiniMax | `minimax` | `MINIMAX_API_KEY` | `https://api.minimax.io/v1` |
+| Upstage | `upstage` | `UPSTAGE_API_KEY` | `https://api.upstage.ai/v1` |
+| Hyperbolic | `hyperbolic` | `HYPERBOLIC_API_KEY` | `https://api.hyperbolic.xyz/v1` |
 | Custom | `custom` | `UTHARNESS_API_KEY` | `http://127.0.0.1:8000/v1` |
 
-When `UTHARNESS_PROVIDER` is omitted, Utharness selects the first configured provider in this order: OpenRouter, OpenAI, Groq, Together, DeepSeek, Fireworks, NVIDIA NIM, Mistral, Cerebras, Cohere, CometAPI, Cloudflare, Ollama Cloud, then SeekAI. Set the provider explicitly when more than one key exists.
+When `UTHARNESS_PROVIDER` is omitted, Utharness selects the first configured provider in this order: OpenRouter, OpenAI, Groq, Together, DeepSeek, Fireworks, NVIDIA NIM, Mistral, Cerebras, Cohere, CometAPI, Cloudflare, Ollama Cloud, SeekAI, xAI, Nebius, Moonshot, MiniMax, Upstage, then Hyperbolic. Set the provider explicitly when more than one key exists.
 
 `UTHARNESS_API_KEY` overrides the provider-specific credential. `UTHARNESS_PROVIDER_URL` overrides the endpoint, and `UTHARNESS_MODEL` overrides the model. Remote endpoints must use HTTPS. Plain HTTP is accepted only for `localhost`, `127.0.0.1`, or `::1`.
 

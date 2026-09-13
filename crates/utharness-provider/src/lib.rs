@@ -24,138 +24,292 @@ pub enum ProviderKind {
     Ollama,
     OllamaCloud,
     SeekAi,
+    Xai,
+    Nebius,
+    Moonshot,
+    MiniMax,
+    Upstage,
+    Hyperbolic,
     Custom,
 }
 
+/// One row per provider. Adding a provider is adding a row here:
+/// `parse`, `id`, `defaults`, auto-detect, `supported_providers`,
+/// `has_provider_configuration`, and the CLI key map all derive from it.
+struct ProviderDef {
+    kind: ProviderKind,
+    id: &'static str,
+    aliases: &'static [&'static str],
+    default_url: &'static str,
+    default_model: &'static str,
+    key_var: Option<&'static str>,
+    /// Extra non-secret env the provider needs (e.g. an account id).
+    extra_env: Option<&'static str>,
+    /// Whether a set key auto-selects this provider when
+    /// UTHARNESS_PROVIDER is unset. False for keyless local Ollama and
+    /// for `custom`, whose key is an explicit override, not a selector.
+    detect: bool,
+}
+
+const PROVIDERS: &[ProviderDef] = &[
+    ProviderDef {
+        kind: ProviderKind::OpenRouter,
+        id: "openrouter",
+        aliases: &[],
+        default_url: "https://openrouter.ai/api/v1",
+        default_model: "openrouter/free",
+        key_var: Some("OPENROUTER_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    ProviderDef {
+        kind: ProviderKind::OpenAi,
+        id: "openai",
+        aliases: &[],
+        default_url: "https://api.openai.com/v1",
+        default_model: "gpt-4o-mini",
+        key_var: Some("OPENAI_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    ProviderDef {
+        kind: ProviderKind::Groq,
+        id: "groq",
+        aliases: &[],
+        default_url: "https://api.groq.com/openai/v1",
+        default_model: "groq/compound-mini",
+        key_var: Some("GROQ_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    ProviderDef {
+        kind: ProviderKind::Together,
+        id: "together",
+        aliases: &[],
+        default_url: "https://api.together.xyz/v1",
+        default_model: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        key_var: Some("TOGETHER_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    ProviderDef {
+        kind: ProviderKind::DeepSeek,
+        id: "deepseek",
+        aliases: &[],
+        default_url: "https://api.deepseek.com/v1",
+        default_model: "deepseek-chat",
+        key_var: Some("DEEPSEEK_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    ProviderDef {
+        kind: ProviderKind::Fireworks,
+        id: "fireworks",
+        aliases: &[],
+        default_url: "https://api.fireworks.ai/inference/v1",
+        default_model: "accounts/fireworks/models/llama-v3p3-70b-instruct",
+        key_var: Some("FIREWORKS_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    ProviderDef {
+        kind: ProviderKind::Nvidia,
+        id: "nvidia",
+        aliases: &["nvidia-nim", "nim"],
+        default_url: "https://integrate.api.nvidia.com/v1",
+        default_model: "nvidia/nemotron-3-super-120b-a12b",
+        key_var: Some("NVIDIA_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    ProviderDef {
+        kind: ProviderKind::Mistral,
+        id: "mistral",
+        aliases: &[],
+        default_url: "https://api.mistral.ai/v1",
+        default_model: "mistral-small-latest",
+        key_var: Some("MISTRAL_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    ProviderDef {
+        kind: ProviderKind::Cerebras,
+        id: "cerebras",
+        aliases: &[],
+        default_url: "https://api.cerebras.ai/v1",
+        default_model: "qwen-3.8-27b",
+        key_var: Some("CEREBRAS_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    ProviderDef {
+        kind: ProviderKind::Cohere,
+        id: "cohere",
+        aliases: &[],
+        default_url: "https://api.cohere.com/compatibility/v1",
+        default_model: "command-a-03-2025",
+        key_var: Some("COHERE_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    ProviderDef {
+        kind: ProviderKind::CometApi,
+        id: "cometapi",
+        aliases: &["comet"],
+        default_url: "https://api.cometapi.com/v1",
+        default_model: "gpt-4o-mini",
+        key_var: Some("COMETAPI_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    // Workers AI has no GET /models endpoint; the account-scoped
+    // OpenAI-compatible base URL is built from CLOUDFLARE_ACCOUNT_ID
+    // in `cloudflare_default_base_url`. This placeholder is only
+    // displayed when the account id is missing.
+    ProviderDef {
+        kind: ProviderKind::Cloudflare,
+        id: "cloudflare",
+        aliases: &["cf", "workers-ai"],
+        default_url: "https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/ai/v1",
+        default_model: "@cf/qwen/qwen3.8-27b",
+        key_var: Some("CLOUDFLARE_API_TOKEN"),
+        extra_env: Some("CLOUDFLARE_ACCOUNT_ID"),
+        detect: true,
+    },
+    ProviderDef {
+        kind: ProviderKind::Ollama,
+        id: "ollama",
+        aliases: &["local"],
+        default_url: "http://127.0.0.1:11434/v1",
+        default_model: "qwen2.5-coder:7b",
+        key_var: None,
+        extra_env: None,
+        detect: false,
+    },
+    // Ollama Cloud serves GET /v1/models (OpenAI shape) but chat
+    // only via the native POST /api/chat protocol (OpenAI chat
+    // completions return 405). complete()/complete_streaming()
+    // branch on this kind accordingly.
+    ProviderDef {
+        kind: ProviderKind::OllamaCloud,
+        id: "ollama-cloud",
+        aliases: &["ollama_cloud", "ollama-api"],
+        default_url: "https://api.ollama.com",
+        default_model: "nemotron-3-ultra",
+        key_var: Some("OLLAMA_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    // Verified live: the api. subdomain is dead (DNS); the apex
+    // host serves OpenAI-compatible /v1/models + SSE chat.
+    // Default mimo-v2.5 streams with content; deepseek-v4-flash
+    // stalls server-side and hy3 returns reasoning-only payloads.
+    ProviderDef {
+        kind: ProviderKind::SeekAi,
+        id: "seekai",
+        aliases: &["seek"],
+        default_url: "https://seekai.cc/v1",
+        default_model: "mimo-v2.5",
+        key_var: Some("SEEKAI_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    // Batch 3: endpoint auth shape verified live (401 without key =
+    // correct OpenAI-compatible path + Bearer scheme). Default models
+    // are vendor flagships; confirm with a key via `providers test`.
+    ProviderDef {
+        kind: ProviderKind::Xai,
+        id: "xai",
+        aliases: &["grok", "x-ai"],
+        default_url: "https://api.x.ai/v1",
+        default_model: "grok-4",
+        key_var: Some("XAI_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    ProviderDef {
+        kind: ProviderKind::Nebius,
+        id: "nebius",
+        aliases: &["nebius-ai"],
+        default_url: "https://api.studio.nebius.com/v1",
+        default_model: "meta-llama/Llama-3.3-70B-Instruct",
+        key_var: Some("NEBIUS_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    ProviderDef {
+        kind: ProviderKind::Moonshot,
+        id: "moonshot",
+        aliases: &["kimi"],
+        default_url: "https://api.moonshot.ai/v1",
+        default_model: "kimi-k2-0711-preview",
+        key_var: Some("MOONSHOT_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    ProviderDef {
+        kind: ProviderKind::MiniMax,
+        id: "minimax",
+        aliases: &[],
+        default_url: "https://api.minimax.io/v1",
+        default_model: "MiniMax-M2",
+        key_var: Some("MINIMAX_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    ProviderDef {
+        kind: ProviderKind::Upstage,
+        id: "upstage",
+        aliases: &["solar"],
+        default_url: "https://api.upstage.ai/v1",
+        default_model: "solar-pro",
+        key_var: Some("UPSTAGE_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    ProviderDef {
+        kind: ProviderKind::Hyperbolic,
+        id: "hyperbolic",
+        aliases: &[],
+        default_url: "https://api.hyperbolic.xyz/v1",
+        default_model: "meta-llama/Llama-3.3-70B-Instruct",
+        key_var: Some("HYPERBOLIC_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    ProviderDef {
+        kind: ProviderKind::Custom,
+        id: "custom",
+        aliases: &["openai-compatible"],
+        default_url: "http://127.0.0.1:8000/v1",
+        default_model: "default",
+        key_var: Some("UTHARNESS_API_KEY"),
+        extra_env: None,
+        detect: false,
+    },
+];
+
 impl ProviderKind {
     pub fn parse(value: &str) -> Result<Self> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "openrouter" => Ok(Self::OpenRouter),
-            "openai" => Ok(Self::OpenAi),
-            "groq" => Ok(Self::Groq),
-            "together" => Ok(Self::Together),
-            "deepseek" => Ok(Self::DeepSeek),
-            "fireworks" => Ok(Self::Fireworks),
-            "nvidia" | "nvidia-nim" | "nim" => Ok(Self::Nvidia),
-            "mistral" => Ok(Self::Mistral),
-            "cerebras" => Ok(Self::Cerebras),
-            "cohere" => Ok(Self::Cohere),
-            "cometapi" | "comet" => Ok(Self::CometApi),
-            "cloudflare" | "cf" | "workers-ai" => Ok(Self::Cloudflare),
-            "ollama" | "local" => Ok(Self::Ollama),
-            "ollama-cloud" | "ollama_cloud" | "ollama-api" => Ok(Self::OllamaCloud),
-            "seekai" | "seek" => Ok(Self::SeekAi),
-            "custom" | "openai-compatible" => Ok(Self::Custom),
-            other => anyhow::bail!("unsupported provider '{other}'"),
-        }
+        let normalized = value.trim().to_ascii_lowercase();
+        PROVIDERS
+            .iter()
+            .find(|def| def.id == normalized || def.aliases.contains(&normalized.as_str()))
+            .map(|def| def.kind.clone())
+            .with_context(|| format!("unsupported provider '{value}'"))
     }
     pub fn id(&self) -> &'static str {
-        match self {
-            Self::OpenRouter => "openrouter",
-            Self::OpenAi => "openai",
-            Self::Groq => "groq",
-            Self::Together => "together",
-            Self::DeepSeek => "deepseek",
-            Self::Fireworks => "fireworks",
-            Self::Nvidia => "nvidia",
-            Self::Mistral => "mistral",
-            Self::Cerebras => "cerebras",
-            Self::Cohere => "cohere",
-            Self::CometApi => "cometapi",
-            Self::Cloudflare => "cloudflare",
-            Self::Ollama => "ollama",
-            Self::OllamaCloud => "ollama-cloud",
-            Self::SeekAi => "seekai",
-            Self::Custom => "custom",
-        }
+        self.def().id
+    }
+    fn def(&self) -> &'static ProviderDef {
+        PROVIDERS
+            .iter()
+            .find(|def| def.kind == *self)
+            .expect("provider table covers every ProviderKind")
     }
     fn defaults(&self) -> (&'static str, &'static str, Option<&'static str>) {
-        match self {
-            Self::OpenRouter => (
-                "https://openrouter.ai/api/v1",
-                "openrouter/free",
-                Some("OPENROUTER_API_KEY"),
-            ),
-            Self::OpenAi => (
-                "https://api.openai.com/v1",
-                "gpt-4o-mini",
-                Some("OPENAI_API_KEY"),
-            ),
-            Self::Groq => (
-                "https://api.groq.com/openai/v1",
-                "groq/compound-mini",
-                Some("GROQ_API_KEY"),
-            ),
-            Self::Together => (
-                "https://api.together.xyz/v1",
-                "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-                Some("TOGETHER_API_KEY"),
-            ),
-            Self::DeepSeek => (
-                "https://api.deepseek.com/v1",
-                "deepseek-chat",
-                Some("DEEPSEEK_API_KEY"),
-            ),
-            Self::Fireworks => (
-                "https://api.fireworks.ai/inference/v1",
-                "accounts/fireworks/models/llama-v3p3-70b-instruct",
-                Some("FIREWORKS_API_KEY"),
-            ),
-            Self::Nvidia => (
-                "https://integrate.api.nvidia.com/v1",
-                "nvidia/nemotron-3-super-120b-a12b",
-                Some("NVIDIA_API_KEY"),
-            ),
-            Self::Mistral => (
-                "https://api.mistral.ai/v1",
-                "mistral-small-latest",
-                Some("MISTRAL_API_KEY"),
-            ),
-            Self::Cerebras => (
-                "https://api.cerebras.ai/v1",
-                "qwen-3.8-27b",
-                Some("CEREBRAS_API_KEY"),
-            ),
-            Self::Cohere => (
-                "https://api.cohere.com/compatibility/v1",
-                "command-a-03-2025",
-                Some("COHERE_API_KEY"),
-            ),
-            Self::CometApi => (
-                "https://api.cometapi.com/v1",
-                "gpt-4o-mini",
-                Some("COMETAPI_API_KEY"),
-            ),
-            // Workers AI has no GET /models endpoint; the account-scoped
-            // OpenAI-compatible base URL is built from CLOUDFLARE_ACCOUNT_ID
-            // in `cloudflare_default_base_url`. This placeholder is only
-            // displayed when the account id is missing.
-            Self::Cloudflare => (
-                "https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/ai/v1",
-                "@cf/qwen/qwen3.8-27b",
-                Some("CLOUDFLARE_API_TOKEN"),
-            ),
-            Self::Ollama => ("http://127.0.0.1:11434/v1", "qwen2.5-coder:7b", None),
-            // Ollama Cloud serves GET /v1/models (OpenAI shape) but chat
-            // only via the native POST /api/chat protocol (OpenAI chat
-            // completions return 405). complete()/complete_streaming()
-            // branch on this kind accordingly.
-            Self::OllamaCloud => (
-                "https://api.ollama.com",
-                "nemotron-3-ultra",
-                Some("OLLAMA_API_KEY"),
-            ),
-            // Verified live: the api. subdomain is dead (DNS); the apex
-            // host serves OpenAI-compatible /v1/models + SSE chat.
-            // Default mimo-v2.5 streams with content; deepseek-v4-flash
-            // stalls server-side and hy3 returns reasoning-only payloads.
-            Self::SeekAi => ("https://seekai.cc/v1", "mimo-v2.5", Some("SEEKAI_API_KEY")),
-            Self::Custom => (
-                "http://127.0.0.1:8000/v1",
-                "default",
-                Some("UTHARNESS_API_KEY"),
-            ),
-        }
+        let def = self.def();
+        (def.default_url, def.default_model, def.key_var)
     }
 }
 
@@ -242,36 +396,12 @@ impl Gateway {
     pub fn from_environment() -> Result<Self> {
         let provider = if let Ok(value) = std::env::var("UTHARNESS_PROVIDER") {
             ProviderKind::parse(&value)?
-        } else if environment_has_value("OPENROUTER_API_KEY") {
-            ProviderKind::OpenRouter
-        } else if environment_has_value("OPENAI_API_KEY") {
-            ProviderKind::OpenAi
-        } else if environment_has_value("GROQ_API_KEY") {
-            ProviderKind::Groq
-        } else if environment_has_value("TOGETHER_API_KEY") {
-            ProviderKind::Together
-        } else if environment_has_value("DEEPSEEK_API_KEY") {
-            ProviderKind::DeepSeek
-        } else if environment_has_value("FIREWORKS_API_KEY") {
-            ProviderKind::Fireworks
-        } else if environment_has_value("NVIDIA_API_KEY") {
-            ProviderKind::Nvidia
-        } else if environment_has_value("MISTRAL_API_KEY") {
-            ProviderKind::Mistral
-        } else if environment_has_value("CEREBRAS_API_KEY") {
-            ProviderKind::Cerebras
-        } else if environment_has_value("COHERE_API_KEY") {
-            ProviderKind::Cohere
-        } else if environment_has_value("COMETAPI_API_KEY") {
-            ProviderKind::CometApi
-        } else if environment_has_value("CLOUDFLARE_API_TOKEN") {
-            ProviderKind::Cloudflare
-        } else if environment_has_value("OLLAMA_API_KEY") {
-            ProviderKind::OllamaCloud
-        } else if environment_has_value("SEEKAI_API_KEY") {
-            ProviderKind::SeekAi
         } else {
-            anyhow::bail!("no AI gateway is configured; set UTHARNESS_PROVIDER or a supported provider API key")
+            autodetect_provider()?.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "no AI gateway is configured; set UTHARNESS_PROVIDER or a supported provider API key"
+                )
+            })?
         };
         Self::new_from_environment(provider)
     }
@@ -675,50 +805,63 @@ impl Gateway {
 
 pub type OpenRouter = Gateway;
 pub fn supported_providers() -> Vec<ProviderStatus> {
-    [
-        ProviderKind::OpenRouter,
-        ProviderKind::OpenAi,
-        ProviderKind::Groq,
-        ProviderKind::Together,
-        ProviderKind::DeepSeek,
-        ProviderKind::Fireworks,
-        ProviderKind::Nvidia,
-        ProviderKind::Mistral,
-        ProviderKind::Cerebras,
-        ProviderKind::Cohere,
-        ProviderKind::CometApi,
-        ProviderKind::Cloudflare,
-        ProviderKind::Ollama,
-        ProviderKind::OllamaCloud,
-        ProviderKind::SeekAi,
-        ProviderKind::Custom,
-    ]
-    .into_iter()
-    .map(Gateway::status_from_environment)
-    .collect()
+    PROVIDERS
+        .iter()
+        .map(|def| Gateway::status_from_environment(def.kind.clone()))
+        .collect()
+}
+
+/// Key variable for a provider id or alias (e.g. "nim" -> "NVIDIA_API_KEY").
+/// Used by the CLI so only this table maps names to credential variables.
+pub fn key_variable(name: &str) -> Option<&'static str> {
+    ProviderKind::parse(name)
+        .ok()
+        .map(|kind| kind.def().key_var)?
+}
+
+/// Provider ids in display order, for `providers env` and docs.
+pub fn provider_ids() -> Vec<&'static str> {
+    PROVIDERS.iter().map(|def| def.id).collect()
+}
+
+/// Credential variables in display order, with `+EXTRA` hints appended
+/// (e.g. `CLOUDFLARE_API_TOKEN+CLOUDFLARE_ACCOUNT_ID`).
+pub fn key_variables() -> Vec<String> {
+    let mut out = Vec::new();
+    for def in PROVIDERS {
+        if let Some(key) = def.key_var {
+            let entry = match def.extra_env {
+                Some(extra) => format!("{key}+{extra}"),
+                None => key.to_string(),
+            };
+            if !out.contains(&entry) {
+                out.push(entry);
+            }
+        }
+    }
+    out
+}
+
+fn autodetect_provider() -> Result<Option<ProviderKind>> {
+    for def in PROVIDERS {
+        if def.detect {
+            if let Some(key) = def.key_var {
+                if environment_has_value(key) {
+                    return Ok(Some(def.kind.clone()));
+                }
+            }
+        }
+    }
+    Ok(None)
 }
 
 pub fn has_provider_configuration() -> bool {
     std::env::var("UTHARNESS_PROVIDER").is_ok_and(|value| !value.trim().is_empty())
-        || [
-            "UTHARNESS_API_KEY",
-            "OPENROUTER_API_KEY",
-            "OPENAI_API_KEY",
-            "GROQ_API_KEY",
-            "TOGETHER_API_KEY",
-            "DEEPSEEK_API_KEY",
-            "FIREWORKS_API_KEY",
-            "NVIDIA_API_KEY",
-            "MISTRAL_API_KEY",
-            "CEREBRAS_API_KEY",
-            "COHERE_API_KEY",
-            "COMETAPI_API_KEY",
-            "CLOUDFLARE_API_TOKEN",
-            "OLLAMA_API_KEY",
-            "SEEKAI_API_KEY",
-        ]
-        .into_iter()
-        .any(environment_has_value)
+        || PROVIDERS.iter().any(|def| {
+            def.key_var
+                .is_some_and(|name| name != "UTHARNESS_API_KEY" && environment_has_value(name))
+        })
+        || environment_has_value("UTHARNESS_API_KEY")
 }
 
 fn environment_has_value(name: &str) -> bool {
@@ -768,33 +911,30 @@ mod tests {
         assert_eq!(value["role"], "user");
     }
     #[test]
-    fn provider_names_are_explicit() {
-        assert_eq!(ProviderKind::parse("ollama").unwrap(), ProviderKind::Ollama);
-        assert_eq!(ProviderKind::parse("nim").unwrap(), ProviderKind::Nvidia);
-        assert_eq!(
-            ProviderKind::parse("mistral").unwrap(),
-            ProviderKind::Mistral
-        );
-        assert_eq!(
-            ProviderKind::parse("cerebras").unwrap(),
-            ProviderKind::Cerebras
-        );
-        assert_eq!(ProviderKind::parse("cohere").unwrap(), ProviderKind::Cohere);
-        assert_eq!(
-            ProviderKind::parse("cometapi").unwrap(),
-            ProviderKind::CometApi
-        );
-        assert_eq!(
-            ProviderKind::parse("cloudflare").unwrap(),
-            ProviderKind::Cloudflare
-        );
-        assert_eq!(ProviderKind::parse("cf").unwrap(), ProviderKind::Cloudflare);
-        assert_eq!(
-            ProviderKind::parse("ollama-cloud").unwrap(),
-            ProviderKind::OllamaCloud
-        );
-        assert_eq!(ProviderKind::parse("seekai").unwrap(), ProviderKind::SeekAi);
+    fn provider_table_is_consistent() {
+        use std::collections::HashSet;
+        // Every id and alias resolves to its row's kind; new rows are
+        // covered automatically, so this test never needs new asserts.
+        let mut ids = HashSet::new();
+        for def in PROVIDERS {
+            assert!(ids.insert(def.id), "duplicate provider id");
+            assert_eq!(ProviderKind::parse(def.id).unwrap(), def.kind);
+            for alias in def.aliases {
+                assert_eq!(ProviderKind::parse(alias).unwrap(), def.kind);
+            }
+            if def.kind == ProviderKind::Ollama {
+                assert!(def.key_var.is_none());
+            } else {
+                assert!(def.key_var.is_some(), "{}", def.id);
+            }
+            assert!(validate_base_url(def.default_url).is_ok(), "{}", def.id);
+        }
         assert!(ProviderKind::parse("unknown").is_err());
+        assert_eq!(
+            provider_ids(),
+            PROVIDERS.iter().map(|def| def.id).collect::<Vec<_>>()
+        );
+        assert!(key_variables().iter().any(|v| v == "GROQ_API_KEY"));
     }
     #[test]
     fn retry_delay_is_bounded_exponential_backoff() {

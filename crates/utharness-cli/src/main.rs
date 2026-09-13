@@ -1287,24 +1287,7 @@ fn setup(args: SetupArgs) -> Result<()> {
 }
 
 fn provider_key_variable(provider: &str) -> Option<&'static str> {
-    match provider {
-        "openrouter" => Some("OPENROUTER_API_KEY"),
-        "openai" => Some("OPENAI_API_KEY"),
-        "groq" => Some("GROQ_API_KEY"),
-        "together" => Some("TOGETHER_API_KEY"),
-        "deepseek" => Some("DEEPSEEK_API_KEY"),
-        "fireworks" => Some("FIREWORKS_API_KEY"),
-        "nvidia" => Some("NVIDIA_API_KEY"),
-        "mistral" => Some("MISTRAL_API_KEY"),
-        "cerebras" => Some("CEREBRAS_API_KEY"),
-        "cohere" => Some("COHERE_API_KEY"),
-        "cometapi" | "comet" => Some("COMETAPI_API_KEY"),
-        "cloudflare" | "cf" | "workers-ai" => Some("CLOUDFLARE_API_TOKEN"),
-        "ollama-cloud" | "ollama_cloud" | "ollama-api" => Some("OLLAMA_API_KEY"),
-        "seekai" | "seek" => Some("SEEKAI_API_KEY"),
-        "custom" => Some("UTHARNESS_API_KEY"),
-        _ => None,
-    }
+    utharness_provider::key_variable(provider)
 }
 
 fn providers(action: ProviderAction) -> Result<()> {
@@ -1380,11 +1363,17 @@ fn providers(action: ProviderAction) -> Result<()> {
         }
         ProviderAction::Env => {
             println!("AI GATEWAY ENVIRONMENT");
-            println!("UTHARNESS_PROVIDER=openrouter|openai|groq|together|deepseek|fireworks|nvidia|mistral|cerebras|cohere|cometapi|cloudflare|ollama|ollama-cloud|seekai|custom");
+            println!(
+                "UTHARNESS_PROVIDER={}",
+                utharness_provider::provider_ids().join("|")
+            );
             println!("UTHARNESS_MODEL=<provider model id>");
             println!("UTHARNESS_PROVIDER_URL=<HTTPS OpenAI-compatible /v1 endpoint>");
             println!("UTHARNESS_API_KEY=<custom override>");
-            println!("Provider keys: OPENROUTER_API_KEY OPENAI_API_KEY GROQ_API_KEY TOGETHER_API_KEY DEEPSEEK_API_KEY FIREWORKS_API_KEY NVIDIA_API_KEY MISTRAL_API_KEY CEREBRAS_API_KEY COHERE_API_KEY COMETAPI_API_KEY CLOUDFLARE_API_TOKEN+CLOUDFLARE_ACCOUNT_ID OLLAMA_API_KEY SEEKAI_API_KEY");
+            println!(
+                "Provider keys: {}",
+                utharness_provider::key_variables().join(" ")
+            );
             println!("Secrets are read at process start and are never persisted by Utharness.");
         }
     }
