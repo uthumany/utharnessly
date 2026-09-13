@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
-const VERSION = '0.2.24';
+const VERSION = '0.2.25';
 const REPOSITORY = 'uthumany/utharnessly';
 const BASE_URL = (process.env.UTHARNESSLY_RELEASE_BASE_URL || `https://github.com/${REPOSITORY}/releases/download/v${VERSION}`).replace(/\/$/, '');
 

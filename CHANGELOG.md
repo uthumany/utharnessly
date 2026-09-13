@@ -4,6 +4,8 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.25] — 2026-09-13
+
 ### Added
 
 - Native provider kinds for Mistral, Cerebras, Cohere (via its OpenAI-compatible endpoint), CometAPI, Cloudflare Workers AI (account-scoped URL, token-health check, curated model list), Ollama Cloud (native `/api/chat` protocol), and SeekAI.
