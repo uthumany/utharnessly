@@ -4,6 +4,8 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.29] — 2026-09-13
+
 ### Added
 
 - Computer use: explicit `utharness desktop` commands (screenshot, click, move, type via stdin, key, scroll, doctor) behind the `desktop` capability plus per-call `--allow`; X11/Wayland/macOS/Windows adapters, destructive-combo and destructive-text denylists, best-effort event audit trail.
