@@ -6,6 +6,13 @@ export const palette = {
   muted: '#8190A3', agent: '#C084FC', tool: '#58C7FA'
 } as const;
 export const bannerGradient = ['#FFD43B', '#FFBE55', '#FFA15A', '#FF8267', '#FF6B81'];
+// Unified hieroglyph palette: gold leaf (divinity), lapis (royalty),
+// hematite (power), papyrus (foundation), nile green (life). Icons render
+// WHITE by convention; these roles color surrounding states.
+export const divine = {
+  gold: '#D4AF37', lapis: '#1D3557', hematite: '#E63946', papyrus: '#F5E6D3', nile: '#2A9D8F',
+  glyphWhite: '#FFFFFF'
+} as const;
 export function getColorMode(env: NodeJS.ProcessEnv = process.env): ColorMode {
   if (env.NO_COLOR !== undefined || env.TERM === 'dumb' || env.UTHARNESS_ASCII === '1') return 'mono';
   if (env.UTHARNESS_COLOR === 'truecolor' || env.COLORTERM?.includes('truecolor')) return 'truecolor';

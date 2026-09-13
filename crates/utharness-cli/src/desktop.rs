@@ -538,7 +538,10 @@ fn missing_hint(tools: &[&str], purpose: &str) -> String {
 
 fn doctor() -> Result<()> {
     let backend = detect();
-    println!("DESKTOP");
+    println!(
+        "{} DESKTOP",
+        crate::icons::icon(crate::icons::Feature::Computer)
+    );
     println!("session:     {:?}", backend.session);
     match &backend.shot {
         Some(tool) => println!("✓ screenshot  {} ({})", tool.binary, tool.install_hint),

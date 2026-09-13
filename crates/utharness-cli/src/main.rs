@@ -19,6 +19,8 @@ use utharness_storage::Storage;
 mod banner;
 mod desktop;
 mod execution;
+mod icons;
+mod progress;
 mod setup_system;
 mod skills;
 mod termux;
@@ -513,7 +515,15 @@ fn main() -> Result<()> {
         Some(CommandKind::Agents(args)) => agents(args.action.unwrap_or(AgentAction::List)),
         Some(CommandKind::Desktop(args)) => desktop::desktop_command(args),
         Some(CommandKind::Tools) => {
-            println!("TOOLS\n✓ read_file       SAFE\n✓ list_directory  SAFE\n! write_file      ASK\n! shell           ASK\n! browser_open    ASK\n! desktop         ASK\n✓ git_diff        SAFE");
+            println!(
+                "TOOLS\n✓ read_file       SAFE\n✓ list_directory  SAFE\n! write_file      ASK\n! shell           ASK\n! browser_open    ASK\n! desktop {} ASK ({})\n✓ git_diff        SAFE\n{} {} commands pending (icon reserved)\n{} {} via `memory add/search/prune`",
+                icons::icon(icons::Feature::Computer),
+                icons::Feature::Computer.label(),
+                icons::icon(icons::Feature::Improve),
+                icons::Feature::Improve.label(),
+                icons::icon(icons::Feature::Remember),
+                icons::Feature::Remember.label(),
+            );
             Ok(())
         }
         Some(CommandKind::Models(args)) => {
@@ -1055,7 +1065,12 @@ fn memory(action: MemoryAction) -> Result<()> {
                 "cli",
                 expires_at,
             )?;
-            println!("stored memory {} [{}]", memory.id, memory.scope);
+            println!(
+                "{} stored memory {} [{}]",
+                icons::icon(icons::Feature::Remember),
+                memory.id,
+                memory.scope
+            );
         }
         MemoryAction::Search { query } => {
             let results = app.storage.search_memory(Some(app.workspace.id), &query)?;
@@ -1068,7 +1083,10 @@ fn memory(action: MemoryAction) -> Result<()> {
         }
         MemoryAction::Prune => {
             let (expired, duplicates) = app.storage.prune_memories(Some(app.workspace.id))?;
-            println!("pruned {expired} expired and {duplicates} duplicate memories");
+            println!(
+                "{} pruned {expired} expired and {duplicates} duplicate memories",
+                icons::icon(icons::Feature::Remember)
+            );
         }
     }
     Ok(())
@@ -1138,7 +1156,10 @@ fn checkpoint() -> Result<()> {
 fn doctor(args: DoctorArgs) -> Result<()> {
     if args.fix {
         fs::create_dir_all(setup_system::home()?)?;
-        println!("UTHARNESS DOCTOR --FIX");
+        println!(
+            "{} UTHARNESS DOCTOR --FIX",
+            icons::icon_accent(icons::Feature::Fix)
+        );
         println!("✓ repaired      user configuration directory");
     }
     let app = App::open(".")?;
@@ -1155,7 +1176,8 @@ fn doctor(args: DoctorArgs) -> Result<()> {
     match Gateway::from_environment() {
         Ok(provider) => match provider.validate_model() {
             Ok(()) => println!(
-                "✓ provider      {}/{} validated",
+                "{} ✓ provider      {}/{} validated",
+                icons::icon_accent(icons::Feature::Test),
                 provider.provider(),
                 provider.model()
             ),
@@ -1176,7 +1198,10 @@ fn doctor(args: DoctorArgs) -> Result<()> {
         })
         .count();
     if missing == 0 {
-        println!("✓ dependencies  required components available");
+        println!(
+            "{} ✓ dependencies  required components available",
+            icons::icon_accent(icons::Feature::Build)
+        );
     } else {
         println!("! dependencies  {missing} required component(s) need attention");
         if args.fix {
@@ -1585,7 +1610,7 @@ fn mcp() -> Result<()> {
 }
 
 fn update() -> Result<()> {
-    println!("UTHARNESS UPDATE");
+    println!("{} UTHARNESS UPDATE", icons::icon(icons::Feature::Build));
     if termux::is_termux() {
         println!("{}", termux::update_guidance());
         return Ok(());
@@ -1622,12 +1647,28 @@ fn update() -> Result<()> {
         println!(
             "Release archive installation detected; checking the latest signed-checksum release…"
         );
-        let script = reqwest::blocking::get(INSTALLER_URL)
+        let mut response = reqwest::blocking::get(INSTALLER_URL)
             .context("failed to download the release installer")?
             .error_for_status()
-            .context("release installer download was rejected")?
-            .bytes()
-            .context("failed to read the release installer")?;
+            .context("release installer download was rejected")?;
+        let total = response.content_length().unwrap_or(0);
+        let mut bar = progress::ProgressBar::new("Downloading installer", total.max(1));
+        let mut script = Vec::with_capacity(total.try_into().unwrap_or(65_536));
+        let mut received: u64 = 0;
+        let mut buf = [0u8; 8192];
+        loop {
+            use std::io::Read;
+            let n = response
+                .read(&mut buf)
+                .context("failed to read the release installer")?;
+            if n == 0 {
+                break;
+            }
+            received += n as u64;
+            script.extend_from_slice(&buf[..n]);
+            bar.set(received);
+        }
+        bar.finish("Installer download");
         let temporary = env::temp_dir().join(format!("utharness-update-{}.sh", std::process::id()));
         fs::write(&temporary, &script).context("failed to stage the release installer")?;
         let status = Command::new("bash")

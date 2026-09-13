@@ -4,6 +4,15 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Hieroglyph feature icons (CLI + TUI): 𓂀 computer use, 𓋹 self-improvement, 𓏞 memory, 𓉐 build, 𓄣 test, 𓌙 fix — white by convention, ASCII fallbacks under NO_COLOR/dumb/UTHARNESS_ASCII, animated scan frames in setup honoring reduced motion, unified divine palette.
+- Native gradient progress bar (stderr, bytes + ETA, 12 FPS cap) for `utharness update` installer downloads, matching the launcher's @vr_patel/tui bar.
+
+### Fixed
+
+- UI typecheck: agent/chat response union now carries the optional tool card without a type error.
+
 ## [0.2.29] — 2026-09-13
 
 ### Added

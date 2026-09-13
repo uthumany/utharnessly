@@ -200,6 +200,13 @@ utharness run --command "cargo test"           # denied in SAFE mode
 utharness run --command "cargo test" --allow    # explicit approval path
 ```
 
+Feature icons use Egyptian hieroglyph identities (white by convention) with
+bracketed ASCII fallbacks when `NO_COLOR=1`, `TERM=dumb`, or `UTHARNESS_ASCII=1`
+is set — 𓂀 computer use, 𓋹 self-improvement, 𓏞 memory, 𓉐 build, 𓄣 test, 𓌙 fix.
+The interactive setup animates these during the environment scan (4 FPS, frozen
+under `UTHARNESS_REDUCED_MOTION=1`), and `utharness update` draws a matching
+gradient progress bar with byte counts and ETA on stderr.
+
 Live model setup, provider defaults, local endpoints, and the credential-safety contract are documented in [`docs/providers.md`](./docs/providers.md).
 
 ## Reference-matched terminal UI

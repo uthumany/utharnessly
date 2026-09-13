@@ -254,6 +254,40 @@ fn memory_supports_kinds_expiry_and_prune() {
 }
 
 #[test]
+fn feature_icons_render_glyphs_and_ascii_fallbacks() {
+    let workspace = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    let bin = env!("CARGO_BIN_EXE_utharness");
+
+    let unicode = run_with_env(bin, workspace.path(), home.path(), &["tools"], &[]);
+    for glyph in ["\u{13080}", "\u{132F9}", "\u{133DC}"] {
+        assert!(unicode.contains(glyph), "missing {glyph} in: {unicode}");
+    }
+    let ascii = run_with_env(
+        bin,
+        workspace.path(),
+        home.path(),
+        &["tools"],
+        &[("UTHARNESS_ASCII", "1")],
+    );
+    for tag in ["[eye]", "[ankh]", "[scroll]"] {
+        assert!(ascii.contains(tag), "missing {tag} in: {ascii}");
+    }
+
+    let doctor = run_with_env(
+        bin,
+        workspace.path(),
+        home.path(),
+        &["desktop", "doctor"],
+        &[("UTHARNESS_TOOLS", "desktop")],
+    );
+    assert!(
+        doctor.contains("\u{13080}"),
+        "doctor header lost the eye: {doctor}"
+    );
+}
+
+#[test]
 fn desktop_commands_require_approval_and_refuse_danger() {
     let workspace = tempdir().unwrap();
     let home = tempdir().unwrap();

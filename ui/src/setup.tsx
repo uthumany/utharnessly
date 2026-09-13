@@ -3,7 +3,7 @@ import { Box, Text, useApp, useInput, useStdout } from 'ink';
 import { execa } from 'execa';
 import { authMethods, developerTools, modes, progress, providers, recommendedTools, tools, type AuthMethod, type EnvironmentReport, type SetupMode } from './setup-data.js';
 import { runtimeBinary } from './runtime-binary.js';
-import { icon } from './tui/icons.js';
+import { featureFrames, icon, type IconName } from './tui/icons.js';
 import { statusBadge } from './tui/status.js';
 import { getColorMode } from './tui/theme.js';
 
@@ -19,8 +19,9 @@ export function parseModelCatalog(raw: string): ModelCatalog {
   return { provider: value.provider, models: [...new Set(value.models)].sort(), active: value.active };
 }
 
+const toolIcons: Record<string, IconName> = { workspace_read: 'folder', git_inspection: 'git', terminal: 'shell', file_write: 'edit', skills: 'skill', memory: 'memory', session_search: 'search', task_planning: 'task', desktop: 'computer' };
 function List({ items, selected, marked }: { items: Array<{ id: string; label: string; description: string }>; selected: number; marked?: Set<string> }) {
-  return <Box flexDirection="column">{items.map((item, index) => <Text key={item.id} color={index === selected ? cyan : undefined} wrap="truncate-end">{index === selected ? <Text color={yellow}>{icon('selector')} </Text> : '  '}{marked ? `[${marked.has(item.id) ? '●' : ' '}]` : `${index + 1}.`} <Text bold={index === selected}>{item.label}</Text> <Text color={muted}>— {item.description}</Text></Text>)}</Box>;
+  return <Box flexDirection="column">{items.map((item, index) => <Text key={item.id} color={index === selected ? cyan : undefined} wrap="truncate-end">{index === selected ? <Text color={yellow}>{icon('selector')} </Text> : '  '}{marked ? `[${marked.has(item.id) ? '●' : ' '}]` : `${index + 1}.`} {toolIcons[item.id] ? `${icon(toolIcons[item.id]!)} ` : ''}<Text bold={index === selected}>{item.label}</Text> <Text color={muted}>— {item.description}</Text></Text>)}</Box>;
 }
 function Progress({ completed, total, label }: { completed: number; total: number; label: string }) {
   const value = progress(completed, total), filled = Math.round(value / 10);
@@ -36,6 +37,14 @@ export function SetupApp() {
   const [customUrl, setCustomUrl] = useState('http://127.0.0.1:8000/v1'), [importPath, setImportPath] = useState('');
   const [enabled, setEnabled] = useState(new Set(recommendedTools)), [report, setReport] = useState<EnvironmentReport | null>(null);
   const [error, setError] = useState(''); const columns = Math.max(30, stdout.columns ?? 80), compact = columns < 70;
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (stage !== 'scan') return;
+    const timer = setInterval(() => setTick(value => value + 1), 250); // 4 FPS, under the 12 FPS cap
+    return () => clearInterval(timer);
+  }, [stage]);
+  const scanFrames = featureFrames('memory');
+  const scanFrame = scanFrames[tick % scanFrames.length];
   const providerInfo = providers.find(item => item.id === provider) ?? providers[0]!;
   const selectedTools = useMemo(() => tools.filter(tool => enabled.has(tool.id)), [enabled]);
   const list = stage === 'mode' ? modes : stage === 'provider' ? providers : stage === 'auth' ? authMethods : stage === 'tools' ? tools : stage === 'model' ? modelOptions.map(id => ({ id, label: id, description: id === model ? 'active selection' : 'available from provider' })) : [];
@@ -105,7 +114,7 @@ export function SetupApp() {
   const available = report?.components.filter(item => item.state === 'AVAILABLE').length ?? 0, total = report?.components.length ?? 0;
   return <Box flexDirection="column" paddingX={compact ? 1 : 3} width={columns}>
     <Text bold color={purple}>UTHARNESS · INTERACTIVE SETUP</Text><Text color={muted}>{'─'.repeat(Math.max(20, Math.min(columns - 2, 76)))}</Text>
-    {stage === 'scan' ? <><Text>◇ Detecting environment and scanning prerequisites…</Text><Progress completed={0} total={1} label="scanning" /></> : null}
+    {stage === 'scan' ? <><Text>{scanFrame} Detecting environment and scanning prerequisites…</Text><Progress completed={tick % 11} total={10} label="scanning" /></> : null}
     {stage === 'mode' ? <><Text>◇ {report?.os}/{report?.architecture} · {report?.shell} · {report?.terminal}</Text><Progress completed={available} total={total} label="environment scan complete" /><List items={modes} selected={selected} /></> : null}
     {stage === 'provider' ? <><Text bold>◉ Select AI provider</Text><List items={providers} selected={selected} /></> : null}
     {stage === 'custom_url' ? <><Text bold>◉ Custom OpenAI-compatible /v1 endpoint</Text><Text color={cyan}>› {customUrl}<Text inverse> </Text></Text><Text color={muted}>HTTPS required except loopback development endpoints</Text></> : null}

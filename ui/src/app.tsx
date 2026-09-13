@@ -11,7 +11,7 @@ import { effectiveLayout, getBreakpoint, getTermuxBreakpoint, workspaceWidths } 
 import { bannerTier } from './tui/banner.js';
 import { defaultUiState, loadUiState, saveUiState } from './tui/state.js';
 import { getColorMode, tone } from './tui/theme.js';
-import type { Message, OverlayKind, PaletteItem, PersistedUiState, RuntimeSnapshot } from './types.js';
+import type { Message, OverlayKind, PaletteItem, PersistedUiState, RuntimeSnapshot, ToolCard } from './types.js';
 
 const commands: PaletteItem[] = [
   { id: 'help', label: '/help', description: 'keyboard and command help', shortcut: 'F1', overlay: 'help' },
@@ -196,7 +196,7 @@ export function App() {
     setStreaming(true);
     const controller = new AbortController();
     activeRequest.current = controller;
-    const backend = useAgent ? submitAgent(effective, process.cwd(), { provider: ui.selectedProvider ?? snapshot?.provider, model: ui.selectedModel ?? snapshot?.model, signal: controller.signal }) : submitChat(effective, process.cwd(), { provider: ui.selectedProvider ?? snapshot?.provider, model: ui.selectedModel ?? snapshot?.model, signal: controller.signal });
+    const backend: Promise<{ text: string; tool?: ToolCard }> = useAgent ? submitAgent(effective, process.cwd(), { provider: ui.selectedProvider ?? snapshot?.provider, model: ui.selectedModel ?? snapshot?.model, signal: controller.signal }) : submitChat(effective, process.cwd(), { provider: ui.selectedProvider ?? snapshot?.provider, model: ui.selectedModel ?? snapshot?.model, signal: controller.signal });
     void backend.then(response => {
       if (controller.signal.aborted) return;
       const id = `${Date.now()}-assistant`;
