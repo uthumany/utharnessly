@@ -4,6 +4,12 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.27] — 2026-09-13
+
+### Fixed
+
+- Plain TUI input now chats with the model instead of running a workspace inspection; `/agent TASK` explicitly runs the bounded agent. Header line stripped from chat replies.
+
 ## [0.2.26] — 2026-09-13
 
 ### Added
