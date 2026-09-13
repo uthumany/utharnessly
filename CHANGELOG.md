@@ -4,6 +4,12 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.28] — 2026-09-13
+
+### Added
+
+- Persistent memory upgrade: schema v2 `expires_at` with versioned migration, `memory add --kind/--expires`, `memory prune` for expired and duplicate records, recall injection into chat and planner prompts, and episodic auto-capture after agent runs.
+
 ## [0.2.27] — 2026-09-13
 
 ### Fixed
