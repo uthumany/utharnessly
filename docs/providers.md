@@ -56,9 +56,10 @@ The supported provider identifiers and credential variables are:
 | Chutes | `chutes` | `CHUTES_API_KEY` | `https://llm.chutes.ai/v1` |
 | OVHcloud | `ovhcloud` | `OVH_AI_API_KEY` | `https://oai.endpoints.kepler.ai.cloud.ovh.net/v1` |
 | MiMo | `mimo` | `MIMO_API_KEY` | `https://api.xiaomimimo.com/v1` |
+| TeamoRouter | `teamorouter` | `TEAMOROUTER_API_KEY` | `https://api.teamorouter.com/v1` (GPT/DeepSeek/GLM/Grok via OpenAI format; Claude needs Anthropic protocol) |
 | Custom | `custom` | `UTHARNESS_API_KEY` | `http://127.0.0.1:8000/v1` |
 
-When `UTHARNESS_PROVIDER` is omitted, Utharness selects the first configured provider in this order: OpenRouter, OpenAI, Groq, Together, DeepSeek, Fireworks, NVIDIA NIM, Mistral, Cerebras, Cohere, CometAPI, Cloudflare, Ollama Cloud, SeekAI, xAI, Nebius, Moonshot, MiniMax, Upstage, Hyperbolic, Zhipu, DashScope, Volcengine, StepFun, SiliconFlow, SambaNova, Novita, HuggingFace, Vercel, Chutes, OVHcloud, then MiMo. Set the provider explicitly when more than one key exists.
+When `UTHARNESS_PROVIDER` is omitted, Utharness selects the first configured provider in this order: OpenRouter, OpenAI, Groq, Together, DeepSeek, Fireworks, NVIDIA NIM, Mistral, Cerebras, Cohere, CometAPI, Cloudflare, Ollama Cloud, SeekAI, xAI, Nebius, Moonshot, MiniMax, Upstage, Hyperbolic, Zhipu, DashScope, Volcengine, StepFun, SiliconFlow, SambaNova, Novita, HuggingFace, Vercel, Chutes, OVHcloud, MiMo, then TeamoRouter. Set the provider explicitly when more than one key exists.
 
 `UTHARNESS_API_KEY` overrides the provider-specific credential. `UTHARNESS_PROVIDER_URL` overrides the endpoint, and `UTHARNESS_MODEL` overrides the model. Remote endpoints must use HTTPS. Plain HTTP is accepted only for `localhost`, `127.0.0.1`, or `::1`.
 

@@ -42,6 +42,7 @@ pub enum ProviderKind {
     Chutes,
     OvhCloud,
     Mimo,
+    TeamoRouter,
     Custom,
 }
 
@@ -414,6 +415,20 @@ const PROVIDERS: &[ProviderDef] = &[
         default_url: "https://api.xiaomimimo.com/v1",
         default_model: "mimo-v2.5",
         key_var: Some("MIMO_API_KEY"),
+        extra_env: None,
+        detect: true,
+    },
+    // TeamoRouter accepts Bearer (x-api-key also works). GPT, DeepSeek,
+    // GLM, Grok, and Gemini families serve OpenAI chat completions;
+    // Claude models need the Anthropic protocol, which this client
+    // does not speak, so default to a GPT-family model.
+    ProviderDef {
+        kind: ProviderKind::TeamoRouter,
+        id: "teamorouter",
+        aliases: &["teamo"],
+        default_url: "https://api.teamorouter.com/v1",
+        default_model: "gpt-5.5",
+        key_var: Some("TEAMOROUTER_API_KEY"),
         extra_env: None,
         detect: true,
     },
