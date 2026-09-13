@@ -254,6 +254,195 @@ fn memory_supports_kinds_expiry_and_prune() {
 }
 
 #[test]
+fn desktop_commands_require_approval_and_refuse_danger() {
+    let workspace = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    let bin = env!("CARGO_BIN_EXE_utharness");
+
+    // No --allow: hard refusal before any backend runs.
+    let denied = Command::new(bin)
+        .current_dir(workspace.path())
+        .env("HOME", home.path())
+        .env("UTHARNESS_HOME", home.path().join(".utharness"))
+        .env("UTHARNESS_TOOLS", "desktop")
+        .args(["desktop", "click", "10", "20"])
+        .output()
+        .expect("run utharness");
+    assert!(!denied.status.success());
+    assert!(
+        String::from_utf8_lossy(&denied.stderr).contains("--allow"),
+        "stderr was: {:?}",
+        String::from_utf8_lossy(&denied.stderr)
+    );
+
+    // Capability missing: refusal names the capability.
+    let capped = Command::new(bin)
+        .current_dir(workspace.path())
+        .env("HOME", home.path())
+        .env("UTHARNESS_HOME", home.path().join(".utharness"))
+        .env("UTHARNESS_TOOLS", "terminal")
+        .args(["desktop", "click", "10", "20", "--allow"])
+        .output()
+        .expect("run utharness");
+    assert!(!capped.status.success());
+    assert!(
+        String::from_utf8_lossy(&capped.stderr).contains("desktop capability is disabled"),
+        "stderr was: {:?}",
+        String::from_utf8_lossy(&capped.stderr)
+    );
+
+    // Destructive combo refused without touching a backend.
+    let logout = Command::new(bin)
+        .current_dir(workspace.path())
+        .env("HOME", home.path())
+        .env("UTHARNESS_HOME", home.path().join(".utharness"))
+        .env("UTHARNESS_TOOLS", "desktop")
+        .args(["desktop", "key", "ctrl+alt+Delete", "--allow"])
+        .output()
+        .expect("run utharness");
+    assert!(!logout.status.success());
+    assert!(
+        String::from_utf8_lossy(&logout.stderr).contains("refused"),
+        "stderr was: {:?}",
+        String::from_utf8_lossy(&logout.stderr)
+    );
+
+    let doctor = run_with_env(
+        bin,
+        workspace.path(),
+        home.path(),
+        &["desktop", "doctor"],
+        &[("UTHARNESS_TOOLS", "desktop")],
+    );
+    assert!(doctor.contains("DESKTOP"));
+    assert!(doctor.contains("policy:"));
+}
+
+#[test]
+fn desktop_tools_drive_stub_backends_end_to_end() {
+    let workspace = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    let stubs = tempdir().unwrap();
+    // Stub `import` (screenshot): writes canned bytes to its last argument.
+    std::fs::write(
+        stubs.path().join("import"),
+        "#!/bin/sh\nprintf 'PNGSTUB' > \"$3\"\n",
+    )
+    .unwrap();
+    // Stub `xdotool` (input): appends its argv to a log file.
+    std::fs::write(
+        stubs.path().join("xdotool"),
+        "#!/bin/sh\necho \"$@\" >> \"$XDOTOOL_LOG\"\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for tool in ["import", "xdotool"] {
+            let path = stubs.path().join(tool);
+            let mut perms = std::fs::metadata(&path).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&path, perms).unwrap();
+        }
+    }
+    let bin = env!("CARGO_BIN_EXE_utharness");
+    let stub_path = format!(
+        "{}:{}",
+        stubs.path().to_str().unwrap(),
+        std::env::var("PATH").unwrap()
+    );
+    let log = home.path().join("xdotool.log");
+    let output = Command::new(bin)
+        .current_dir(workspace.path())
+        .env("HOME", home.path())
+        .env("UTHARNESS_HOME", home.path().join(".utharness"))
+        .env("PATH", &stub_path)
+        .env("UTHARNESS_TOOLS", "desktop")
+        .env("DISPLAY", ":9")
+        .env_remove("WAYLAND_DISPLAY")
+        .env("XDOTOOL_LOG", &log)
+        .args(["desktop", "screenshot", "--output", "shot.png", "--allow"])
+        .output()
+        .expect("run utharness");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        std::fs::read(workspace.path().join("shot.png")).unwrap(),
+        b"PNGSTUB"
+    );
+
+    for args in [
+        vec!["desktop", "click", "10", "20", "--allow"],
+        vec!["desktop", "move", "30", "40", "--allow"],
+        vec!["desktop", "key", "ctrl+s", "--allow"],
+        vec![
+            "desktop", "scroll", "down", "--amount", "2", "--x", "5", "--y", "6", "--allow",
+        ],
+    ] {
+        let output = Command::new(bin)
+            .current_dir(workspace.path())
+            .env("HOME", home.path())
+            .env("UTHARNESS_HOME", home.path().join(".utharness"))
+            .env("PATH", &stub_path)
+            .env("UTHARNESS_TOOLS", "desktop")
+            .env("DISPLAY", ":9")
+            .env_remove("WAYLAND_DISPLAY")
+            .env("XDOTOOL_LOG", &log)
+            .args(&args)
+            .output()
+            .expect("run utharness");
+        assert!(
+            output.status.success(),
+            "{args:?} stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    // Piped text reaches the backend (forbidden patterns still refused).
+    let mut child = Command::new(bin)
+        .current_dir(workspace.path())
+        .env("HOME", home.path())
+        .env("UTHARNESS_HOME", home.path().join(".utharness"))
+        .env("PATH", &stub_path)
+        .env("UTHARNESS_TOOLS", "desktop")
+        .env("DISPLAY", ":9")
+        .env_remove("WAYLAND_DISPLAY")
+        .env("XDOTOOL_LOG", &log)
+        .args(["desktop", "type", "--allow"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"hello desktop")
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let log_text = std::fs::read_to_string(&log).unwrap();
+    assert!(log_text.contains("mousemove 10 20 click 1"), "{log_text}");
+    assert!(log_text.contains("mousemove 30 40"), "{log_text}");
+    assert!(
+        log_text.contains("key --clearmodifiers ctrl+s"),
+        "{log_text}"
+    );
+    assert!(log_text.contains("click 5"), "{log_text}");
+    assert!(
+        log_text.contains("type --clearmodifiers -- hello desktop"),
+        "{log_text}"
+    );
+}
+
+#[test]
 fn cli_persists_workspace_session_memory_and_doctor() {
     let workspace = tempdir().unwrap();
     let home = tempdir().unwrap();

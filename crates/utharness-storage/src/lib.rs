@@ -185,6 +185,9 @@ impl Storage {
         })
     }
 
+    // Seven positional columns mirror the memories table; a struct would
+    // churn every caller for no safety gain.
+    #[allow(clippy::too_many_arguments)]
     pub fn add_memory(
         &self,
         workspace_id: Option<Id>,

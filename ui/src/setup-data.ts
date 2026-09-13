@@ -71,7 +71,8 @@ export const tools: ToolOption[] = [
   { id: 'skills', label: 'Skills & MCP', description: 'validated extension registries', risk: 'safe' },
   { id: 'memory', label: 'Persistent memory', description: 'project notes across sessions', risk: 'safe' },
   { id: 'session_search', label: 'Sessions', description: 'search local conversation history', risk: 'safe' },
-  { id: 'task_planning', label: 'Agents & planning', description: 'checkpoints and bounded plans', risk: 'safe' }
+  { id: 'task_planning', label: 'Agents & planning', description: 'checkpoints and bounded plans', risk: 'safe' },
+  { id: 'desktop', label: 'Desktop control', description: 'screenshot, click, and type with approval', risk: 'ask' }
 ];
 
 export const recommendedTools = ['workspace_read', 'git_inspection', 'skills', 'memory'];

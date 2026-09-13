@@ -17,6 +17,7 @@ use utharness_security::Policy;
 use utharness_storage::Storage;
 
 mod banner;
+mod desktop;
 mod execution;
 mod setup_system;
 mod skills;
@@ -70,6 +71,7 @@ enum CommandKind {
     #[command(alias = "provider")]
     Providers(ProviderArgs),
     Agents(AgentArgs),
+    Desktop(desktop::DesktopArgs),
     Tools,
     Models(ModelArgs),
     Mcp,
@@ -156,6 +158,7 @@ const SETUP_TOOLS: &[&str] = &[
     "memory",
     "session_search",
     "task_planning",
+    "desktop",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -508,8 +511,9 @@ fn main() -> Result<()> {
             providers(args.action.unwrap_or(ProviderAction::List))
         }
         Some(CommandKind::Agents(args)) => agents(args.action.unwrap_or(AgentAction::List)),
+        Some(CommandKind::Desktop(args)) => desktop::desktop_command(args),
         Some(CommandKind::Tools) => {
-            println!("TOOLS\n✓ read_file       SAFE\n✓ list_directory  SAFE\n! write_file      ASK\n! shell           ASK\n! browser_open    ASK\n✓ git_diff        SAFE");
+            println!("TOOLS\n✓ read_file       SAFE\n✓ list_directory  SAFE\n! write_file      ASK\n! shell           ASK\n! browser_open    ASK\n! desktop         ASK\n✓ git_diff        SAFE");
             Ok(())
         }
         Some(CommandKind::Models(args)) => {

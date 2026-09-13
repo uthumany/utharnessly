@@ -180,7 +180,17 @@ utharness providers test [NAME]    Test the selected gateway's models endpoint
 utharness providers env            Print environment setup help
 utharness agents list              Show the real bounded agent runtime
 utharness agents run PROMPT        Run the bounded SAFE inspection agent
+utharness desktop CMD --allow      Explicit desktop control (screenshot, click, move, type, key, scroll, doctor)
 utharness tools                    List registered tools and policy modes
+```
+
+Desktop control is intentionally opt-in, like shell execution:
+
+```bash
+utharness desktop doctor                        # backends, install hints, policy
+utharness desktop screenshot --output s.png     # denied without --allow
+utharness desktop screenshot --output s.png --allow
+echo hello | utharness desktop type --allow     # stdin only, never argv
 ```
 
 Shell execution is intentionally opt-in:
