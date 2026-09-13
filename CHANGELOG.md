@@ -4,6 +4,8 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.30] — 2026-09-13
+
 ### Added
 
 - Hieroglyph feature icons (CLI + TUI): 𓂀 computer use, 𓋹 self-improvement, 𓏞 memory, 𓉐 build, 𓄣 test, 𓌙 fix — white by convention, ASCII fallbacks under NO_COLOR/dumb/UTHARNESS_ASCII, animated scan frames in setup honoring reduced motion, unified divine palette.
