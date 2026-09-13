@@ -4,6 +4,12 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Native provider kinds for Mistral, Cerebras, Cohere (via its OpenAI-compatible endpoint), CometAPI, Cloudflare Workers AI (account-scoped URL, token-health check, curated model list), Ollama Cloud (native `/api/chat` protocol), and SeekAI.
+- `utharness providers test --all` audits every configured key in one run with per-provider pass/fail lines.
+- Gateway HTTP client sends a product `utharness/<version>` User-Agent instead of the default reqwest signature, which some provider WAFs tar-pit.
+
 ## [0.2.24] — 2026-09-13
 
 - Add an explicit debounced terminal resize subscription so an idle TUI redraws without an unrelated state update.

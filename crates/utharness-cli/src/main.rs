@@ -232,6 +232,9 @@ enum ProviderAction {
     Test {
         #[arg(default_value = "auto")]
         provider: String,
+        /// Test every configured provider instead of a single one.
+        #[arg(long)]
+        all: bool,
     },
     Env,
 }
@@ -1292,6 +1295,13 @@ fn provider_key_variable(provider: &str) -> Option<&'static str> {
         "deepseek" => Some("DEEPSEEK_API_KEY"),
         "fireworks" => Some("FIREWORKS_API_KEY"),
         "nvidia" => Some("NVIDIA_API_KEY"),
+        "mistral" => Some("MISTRAL_API_KEY"),
+        "cerebras" => Some("CEREBRAS_API_KEY"),
+        "cohere" => Some("COHERE_API_KEY"),
+        "cometapi" | "comet" => Some("COMETAPI_API_KEY"),
+        "cloudflare" | "cf" | "workers-ai" => Some("CLOUDFLARE_API_TOKEN"),
+        "ollama-cloud" | "ollama_cloud" | "ollama-api" => Some("OLLAMA_API_KEY"),
+        "seekai" | "seek" => Some("SEEKAI_API_KEY"),
         "custom" => Some("UTHARNESS_API_KEY"),
         _ => None,
     }
@@ -1320,7 +1330,40 @@ fn providers(action: ProviderAction) -> Result<()> {
                 );
             }
         }
-        ProviderAction::Test { provider } => {
+        ProviderAction::Test { provider, all } => {
+            if all || provider == "all" {
+                let mut passed = 0;
+                let mut failed = 0;
+                for status in supported_providers() {
+                    if !status.configured {
+                        continue;
+                    }
+                    let result = ProviderKind::parse(&status.provider)
+                        .and_then(Gateway::new_from_environment)
+                        .and_then(|gateway| gateway.health_check().map(|code| (gateway, code)));
+                    match result {
+                        Ok((gateway, code)) => {
+                            passed += 1;
+                            println!(
+                                "✓ provider={} model={} endpoint={} HTTP={}",
+                                gateway.provider(),
+                                gateway.model(),
+                                gateway.base_url(),
+                                code
+                            );
+                        }
+                        Err(error) => {
+                            failed += 1;
+                            println!("✗ provider={} error={error:#}", status.provider);
+                        }
+                    }
+                }
+                println!("{passed} passed, {failed} failed");
+                if passed == 0 {
+                    anyhow::bail!("no configured provider passed its health check");
+                }
+                return Ok(());
+            }
             let gateway = if provider == "auto" {
                 Gateway::from_environment()?
             } else {
@@ -1337,11 +1380,11 @@ fn providers(action: ProviderAction) -> Result<()> {
         }
         ProviderAction::Env => {
             println!("AI GATEWAY ENVIRONMENT");
-            println!("UTHARNESS_PROVIDER=openrouter|openai|groq|together|deepseek|fireworks|nvidia|ollama|custom");
+            println!("UTHARNESS_PROVIDER=openrouter|openai|groq|together|deepseek|fireworks|nvidia|mistral|cerebras|cohere|cometapi|cloudflare|ollama|ollama-cloud|seekai|custom");
             println!("UTHARNESS_MODEL=<provider model id>");
             println!("UTHARNESS_PROVIDER_URL=<HTTPS OpenAI-compatible /v1 endpoint>");
             println!("UTHARNESS_API_KEY=<custom override>");
-            println!("Provider keys: OPENROUTER_API_KEY OPENAI_API_KEY GROQ_API_KEY TOGETHER_API_KEY DEEPSEEK_API_KEY FIREWORKS_API_KEY NVIDIA_API_KEY");
+            println!("Provider keys: OPENROUTER_API_KEY OPENAI_API_KEY GROQ_API_KEY TOGETHER_API_KEY DEEPSEEK_API_KEY FIREWORKS_API_KEY NVIDIA_API_KEY MISTRAL_API_KEY CEREBRAS_API_KEY COHERE_API_KEY COMETAPI_API_KEY CLOUDFLARE_API_TOKEN+CLOUDFLARE_ACCOUNT_ID OLLAMA_API_KEY SEEKAI_API_KEY");
             println!("Secrets are read at process start and are never persisted by Utharness.");
         }
     }

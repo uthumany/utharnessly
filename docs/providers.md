@@ -13,6 +13,7 @@ export UTHARNESS_MODEL='openrouter/free'
 
 utharness providers list
 utharness providers test
+utharness providers test --all   # every configured key, one honest line each
 utharness models list
 utharness models test
 utharness chat 'Explain the current Git changes'
@@ -29,10 +30,17 @@ The supported provider identifiers and credential variables are:
 | DeepSeek | `deepseek` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com/v1` |
 | Fireworks | `fireworks` | `FIREWORKS_API_KEY` | `https://api.fireworks.ai/inference/v1` |
 | NVIDIA NIM | `nvidia` | `NVIDIA_API_KEY` | `https://integrate.api.nvidia.com/v1` |
+| Mistral | `mistral` | `MISTRAL_API_KEY` | `https://api.mistral.ai/v1` |
+| Cerebras | `cerebras` | `CEREBRAS_API_KEY` | `https://api.cerebras.ai/v1` |
+| Cohere | `cohere` | `COHERE_API_KEY` | `https://api.cohere.com/compatibility/v1` |
+| CometAPI | `cometapi` | `COMETAPI_API_KEY` | `https://api.cometapi.com/v1` |
+| Cloudflare Workers AI | `cloudflare` | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` | `https://api.cloudflare.com/client/v4/accounts/{id}/ai/v1` |
 | Ollama | `ollama` | None | `http://127.0.0.1:11434/v1` |
+| Ollama Cloud | `ollama-cloud` | `OLLAMA_API_KEY` | `https://api.ollama.com` (models via `/v1/models`, chat via native `/api/chat`) |
+| SeekAI | `seekai` | `SEEKAI_API_KEY` | `https://seekai.cc/v1` |
 | Custom | `custom` | `UTHARNESS_API_KEY` | `http://127.0.0.1:8000/v1` |
 
-When `UTHARNESS_PROVIDER` is omitted, Utharness selects the first configured provider in this order: OpenRouter, OpenAI, Groq, Together, DeepSeek, Fireworks, then NVIDIA NIM. Set the provider explicitly when more than one key exists.
+When `UTHARNESS_PROVIDER` is omitted, Utharness selects the first configured provider in this order: OpenRouter, OpenAI, Groq, Together, DeepSeek, Fireworks, NVIDIA NIM, Mistral, Cerebras, Cohere, CometAPI, Cloudflare, Ollama Cloud, then SeekAI. Set the provider explicitly when more than one key exists.
 
 `UTHARNESS_API_KEY` overrides the provider-specific credential. `UTHARNESS_PROVIDER_URL` overrides the endpoint, and `UTHARNESS_MODEL` overrides the model. Remote endpoints must use HTTPS. Plain HTTP is accepted only for `localhost`, `127.0.0.1`, or `::1`.
 
