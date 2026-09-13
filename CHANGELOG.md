@@ -4,6 +4,8 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.26] — 2026-09-13
+
 ### Added
 
 - Table-driven provider registry: one row per provider drives parsing, defaults, auto-detect, and CLI key mapping; new rows self-test.
