@@ -4,6 +4,11 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Table-driven provider registry: one row per provider drives parsing, defaults, auto-detect, and CLI key mapping; new rows self-test.
+- 21 new native providers: xai, nebius, moonshot, minimax, upstage, hyperbolic, zhipu, dashscope, volcengine, stepfun, siliconflow, sambanova, novita, huggingface, vercel, chutes, ovhcloud, mimo, teamorouter, perplexity, gemini (36 native + custom total).
+
 ## [0.2.25] — 2026-09-13
 
 ### Added
