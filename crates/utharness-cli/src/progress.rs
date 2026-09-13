@@ -19,8 +19,13 @@ const STOPS: [(u8, u8, u8); 3] = [
 ];
 
 fn gradient(position: f64) -> (u8, u8, u8) {
-    let clamped = position.clamp(0.0, 1.0);
-    let segment = (clamped * 2.0).min(1.999);
+    if position <= 0.0 {
+        return STOPS[0];
+    }
+    if position >= 1.0 {
+        return STOPS[2];
+    }
+    let segment = position * 2.0;
     let index = segment as usize;
     let mix = segment - index as f64;
     let (a, b) = (STOPS[index], STOPS[index + 1]);
