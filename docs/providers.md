@@ -50,9 +50,15 @@ The supported provider identifiers and credential variables are:
 | StepFun | `stepfun` | `STEPFUN_API_KEY` | `https://api.stepfun.com/v1` |
 | SiliconFlow | `siliconflow` | `SILICONFLOW_API_KEY` | `https://api.siliconflow.cn/v1` |
 | SambaNova | `sambanova` | `SAMBANOVA_API_KEY` | `https://api.sambanova.ai/v1` |
+| Novita | `novita` | `NOVITA_API_KEY` | `https://api.novita.ai/v3/openai` |
+| HuggingFace | `huggingface` | `HF_TOKEN` | `https://router.huggingface.co/v1` |
+| Vercel AI Gateway | `vercel` | `VERCEL_AI_GATEWAY_API_KEY` | `https://ai-gateway.vercel.sh/v1` |
+| Chutes | `chutes` | `CHUTES_API_KEY` | `https://llm.chutes.ai/v1` |
+| OVHcloud | `ovhcloud` | `OVH_AI_API_KEY` | `https://oai.endpoints.kepler.ai.cloud.ovh.net/v1` |
+| MiMo | `mimo` | `MIMO_API_KEY` | `https://api.xiaomimimo.com/v1` |
 | Custom | `custom` | `UTHARNESS_API_KEY` | `http://127.0.0.1:8000/v1` |
 
-When `UTHARNESS_PROVIDER` is omitted, Utharness selects the first configured provider in this order: OpenRouter, OpenAI, Groq, Together, DeepSeek, Fireworks, NVIDIA NIM, Mistral, Cerebras, Cohere, CometAPI, Cloudflare, Ollama Cloud, SeekAI, xAI, Nebius, Moonshot, MiniMax, Upstage, Hyperbolic, Zhipu, DashScope, Volcengine, StepFun, SiliconFlow, then SambaNova. Set the provider explicitly when more than one key exists.
+When `UTHARNESS_PROVIDER` is omitted, Utharness selects the first configured provider in this order: OpenRouter, OpenAI, Groq, Together, DeepSeek, Fireworks, NVIDIA NIM, Mistral, Cerebras, Cohere, CometAPI, Cloudflare, Ollama Cloud, SeekAI, xAI, Nebius, Moonshot, MiniMax, Upstage, Hyperbolic, Zhipu, DashScope, Volcengine, StepFun, SiliconFlow, SambaNova, Novita, HuggingFace, Vercel, Chutes, OVHcloud, then MiMo. Set the provider explicitly when more than one key exists.
 
 `UTHARNESS_API_KEY` overrides the provider-specific credential. `UTHARNESS_PROVIDER_URL` overrides the endpoint, and `UTHARNESS_MODEL` overrides the model. Remote endpoints must use HTTPS. Plain HTTP is accepted only for `localhost`, `127.0.0.1`, or `::1`.
 
