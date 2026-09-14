@@ -28,14 +28,21 @@ The copyable installation entrypoint is [`INSTALLATION.md`](./INSTALLATION.md). 
 # npm
 npm install --global utharnessly
 utharness --version
+```
 
+```bash
 # npx
 npx --yes utharnessly --help
 
+```
+
+```bash
 # PyPI
 python -m pip install utharnessly
 utharness --version
+```
 
+```bash
 # Linux/macOS shell installer
 curl -fsSL https://raw.githubusercontent.com/uthumany/utharnessly/main/packaging/install.sh | bash
 ```
