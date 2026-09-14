@@ -4,6 +4,8 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.31] — 2026-09-14
+
 ### Fixed
 
 - Saved provider/model choice now survives outside the configured workspace: the CLI falls back to the global `~/.utharness/config.yaml` (env > workspace file > global file > autodetect) and the TUI snapshot reads the same files, so opening utharness elsewhere no longer silently drops to autodetect (often groq).
