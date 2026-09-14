@@ -106,6 +106,10 @@ jobs:
         with:
           version: 11.19.0
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1: v3.2.2 installs the removed "tools" package and fails on current runner images
+        with:
+          # v4 still defaults to 'tools platform-tools'; the obsolete tools
+          # package no longer exists upstream and aborts the whole step.
+          packages: platform-tools
       - uses: nttld/setup-ndk@2817442ee7c3346c1eb7d2ec60263c93206ba14f
         with:
           ndk-version: r26b
