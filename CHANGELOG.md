@@ -4,6 +4,12 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.33] — 2026-09-14
+
+### Fixed
+
+- Release pipeline, second half: setup-android v4 still defaults to installing the removed `tools` package, so its `packages` input is now pinned to `platform-tools` only.
+
 ## [0.2.32] — 2026-09-14
 
 ### Fixed
