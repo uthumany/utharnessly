@@ -43,6 +43,43 @@ const runtimeSchema = z.object({
 const now = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const id = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
+// Saved provider/model resolution for the snapshot header. Mirrors the CLI
+// precedence (explicit env > workspace utharness.json > global config.yaml):
+// without this, opening the TUI anywhere dropped the setup choice.
+export async function resolveSavedSelection(cwd = process.cwd(), utharnessHome = process.env.UTHARNESS_HOME ?? path.join(os.homedir(), '.utharness')): Promise<{ provider?: string; model?: string }> {
+  try {
+    const raw = await fs.readFile(path.join(cwd, 'utharness.json'), 'utf8');
+    const config = JSON.parse(raw) as { schemaVersion?: number; provider?: string; model?: string };
+    if (config.schemaVersion === 1 && config.provider && config.provider !== 'offline' && config.model) {
+      return { provider: config.provider, model: config.model };
+    }
+  } catch {
+    // No workspace config; fall through to the global file.
+  }
+  try {
+    const raw = await fs.readFile(path.join(utharnessHome, 'config.yaml'), 'utf8');
+    let provider: string | undefined; let model: string | undefined;
+    for (const line of raw.split('\n')) {
+      const separator = line.indexOf(':');
+      if (separator < 0) continue;
+      const key = line.slice(0, separator).trim();
+      if (key !== 'provider' && key !== 'model') continue;
+      try {
+        const value = JSON.parse(line.slice(separator + 1).trim()) as unknown;
+        if (typeof value === 'string' && value) {
+          if (key === 'provider') provider = value; else model = value;
+        }
+      } catch {
+        // Skip malformed lines; a partial file still yields nothing.
+      }
+    }
+    if (provider && provider !== 'offline' && model) return { provider, model };
+  } catch {
+    // No global config either; caller falls back to env/autodetect.
+  }
+  return {};
+}
+
 const initialMessages = (): Message[] => [
   { id: id(), role: 'utharness', text: 'Ready. Ask a question, reference @files, or run a slash command.', time: now() }
 ];
@@ -65,7 +102,8 @@ export async function loadSnapshot(cwd = process.cwd()): Promise<RuntimeSnapshot
   const isTermux = Boolean(process.env.TERMUX_VERSION || process.env.PREFIX?.includes('com.termux'));
   const workspacePath = gitRoot || cwd;
   const workspace = workspacePath.startsWith(home) ? `~${workspacePath.slice(home.length)}` : workspacePath;
-  const provider = process.env.UTHARNESS_PROVIDER ?? (process.env.OPENROUTER_API_KEY ? 'openrouter' : 'offline');
+  const saved = await resolveSavedSelection(cwd);
+  const provider = process.env.UTHARNESS_PROVIDER ?? saved.provider ?? (process.env.OPENROUTER_API_KEY ? 'openrouter' : 'offline');
   const storagePath = path.join(home, 'storage');
   let storage = 'sandbox';
   try {
@@ -78,7 +116,7 @@ export async function loadSnapshot(cwd = process.cwd()): Promise<RuntimeSnapshot
     workspace,
     permission: process.env.UTHARNESS_PERMISSION ?? 'offline (default deny)',
     provider,
-    model: process.env.UTHARNESS_MODEL ?? 'gpt-4o-mini',
+    model: process.env.UTHARNESS_MODEL ?? (process.env.UTHARNESS_PROVIDER ? undefined : saved.model) ?? 'gpt-4o-mini',
     context: process.env.UTHARNESS_CONTEXT ?? '128K context left',
     network: process.env.OPENROUTER_API_KEY ? 'connected' : 'offline',
     projectSpecific: Boolean(gitRoot),

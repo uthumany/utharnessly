@@ -213,6 +213,26 @@ pub fn config_path() -> Result<PathBuf> {
     Ok(home()?.join("config.yaml"))
 }
 
+/// Read the saved provider/model pair from the global config file written by
+/// every setup run. The file is line-oriented `key: "json-value"` pairs, so a
+/// tiny manual parser avoids a YAML dependency. Returns None when the file is
+/// missing, unparsable, or lacks either field.
+pub fn load_global_selection() -> Option<(String, String)> {
+    let raw = fs::read_to_string(config_path().ok()?).ok()?;
+    let mut provider: Option<String> = None;
+    let mut model: Option<String> = None;
+    for line in raw.lines() {
+        let (key, value) = line.split_once(':')?;
+        let parsed: Option<String> = serde_json::from_str(value.trim()).ok();
+        match key.trim() {
+            "provider" => provider = parsed,
+            "model" => model = parsed,
+            _ => {}
+        }
+    }
+    Some((provider?, model?))
+}
+
 pub fn persist_secret(name: &str, value: &str) -> Result<PathBuf> {
     if !valid_secret_name(name) {
         anyhow::bail!("invalid secret variable name");
@@ -354,6 +374,21 @@ mod tests {
         assert!(persist_secret("", "secret").is_err());
         assert!(persist_secret("1INVALID", "secret").is_err());
         assert!(persist_secret("mixed_Case", "secret").is_err());
+        env::remove_var("UTHARNESS_HOME");
+    }
+
+    #[test]
+    fn global_selection_round_trips_setup_choices() {
+        let _guard = ENVIRONMENT_LOCK.lock().unwrap();
+        let directory = tempdir().unwrap();
+        env::set_var("UTHARNESS_HOME", directory.path());
+        assert!(load_global_selection().is_none());
+        let workspace = directory.path().join("utharness.json");
+        write_global_config("quick", "cerebras", "qwen-3.8-27b", &workspace).unwrap();
+        assert_eq!(
+            load_global_selection(),
+            Some(("cerebras".to_string(), "qwen-3.8-27b".to_string())),
+        );
         env::remove_var("UTHARNESS_HOME");
     }
 }

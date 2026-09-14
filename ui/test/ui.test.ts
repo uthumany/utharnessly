@@ -8,7 +8,7 @@ import { bannerVariant, effectiveLayout, getBreakpoint, getTermuxBreakpoint, wor
 import { bannerHeight, bannerTier, detectTerminalCapabilities, letterColors, resolveIconMode } from '../src/tui/banner.js';
 import { getColorMode } from '../src/tui/theme.js';
 import { loadUiState, normalizeUiState, saveUiState } from '../src/tui/state.js';
-import { loadSnapshot, parseGitSnapshot } from '../src/runtime.js';
+import { loadSnapshot, parseGitSnapshot, resolveSavedSelection } from '../src/runtime.js';
 import { runtimeBinary } from '../src/runtime-binary.js';
 import { authMethods, modes, progress, providers, recommendedTools, tools } from '../src/setup-data.js';
 import { parseModelCatalog } from '../src/setup.js';
@@ -107,6 +107,19 @@ test('detects Termux runtime metadata without requiring Android services', async
   if (previousPrefix === undefined) delete process.env.PREFIX; else process.env.PREFIX = previousPrefix;
 });
 
+test('saved provider selection survives outside the configured workspace', async () => {
+  const { default: os } = await import('node:os');
+  const { default: path } = await import('node:path');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'utharness-select-'));
+  const configured = path.join(root, 'a'); const bare = path.join(root, 'b'); const home = path.join(root, 'home');
+  await fs.mkdir(configured, { recursive: true }); await fs.mkdir(bare, { recursive: true }); await fs.mkdir(home, { recursive: true });
+  await fs.writeFile(path.join(configured, 'utharness.json'), JSON.stringify({ schemaVersion: 1, provider: 'cerebras', model: 'qwen-3.8-27b' }));
+  await fs.writeFile(path.join(home, 'config.yaml'), 'schema_version: 1\nmode: "quick"\nprovider: "cerebras"\nmodel: "qwen-3.8-27b"\n');
+  assert.deepEqual(await resolveSavedSelection(configured, home), { provider: 'cerebras', model: 'qwen-3.8-27b' });
+  assert.deepEqual(await resolveSavedSelection(bare, home), { provider: 'cerebras', model: 'qwen-3.8-27b' });
+  assert.deepEqual(await resolveSavedSelection(bare, path.join(root, 'no-home')), {});
+  await fs.rm(root, { recursive: true, force: true });
+});
 test('loads a validated runtime snapshot with live telemetry', async () => {
   const snapshot = await loadSnapshot(process.cwd()); assert.ok(snapshot.workspace.length > 0); assert.equal(snapshot.messages.length, 1);
   assert.equal(snapshot.messages[0]?.role, 'utharness'); assert.ok(snapshot.git.branch.length > 0); assert.ok(snapshot.platform.length > 0); assert.ok(snapshot.termuxApi.length > 0);

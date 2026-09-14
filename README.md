@@ -216,6 +216,13 @@ gradient progress bar with byte counts and ETA on stderr.
 
 Live model setup, provider defaults, local endpoints, and the credential-safety contract are documented in [`docs/providers.md`](./docs/providers.md).
 
+Provider and model resolution order is explicit: `UTHARNESS_PROVIDER`/`UTHARNESS_MODEL`
+environment variables win, then the workspace `utharness.json`, then the global
+`~/.utharness/config.yaml` written by every setup, and finally provider
+autodetect from exported keys. Saving a setup therefore sticks everywhere —
+opening utharness in another directory (or the TUI) reuses the saved choice
+instead of falling back to whichever key autodetect finds first.
+
 ## Reference-matched terminal UI
 
 The interactive UI under [`ui/`](./ui) is a replacement for the former Rust TUI, not an additional disconnected mock. The Rust launcher starts `ui/dist/index.js` through Node 22 and falls back to `pnpm --dir ui dev` when a source checkout has not built the bundle. Set `UTHARNESS_UI_ENTRY` to use a custom bundle and `UTHARNESS_RUNTIME_BIN` to override the runtime executable used by the UI adapter.

@@ -254,6 +254,76 @@ fn memory_supports_kinds_expiry_and_prune() {
 }
 
 #[test]
+fn saved_provider_survives_outside_the_workspace() {
+    // Live end-to-end for: setup X in dir A, open elsewhere, still X.
+    // Skips (does not fail) where no provider key is available, e.g. CI.
+    let (key_name, key_value) = match std::env::var("CEREBRAS_API_KEY")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .map(|v| ("CEREBRAS_API_KEY", v))
+    {
+        Some(pair) => pair,
+        None => {
+            eprintln!("SKIP: set CEREBRAS_API_KEY to run the live selection test");
+            return;
+        }
+    };
+    let configured = tempdir().unwrap();
+    let bare = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    let bin = env!("CARGO_BIN_EXE_utharness");
+    let home_str = home.path().to_str().unwrap().to_string();
+
+    let setup = run_with_env(
+        bin,
+        configured.path(),
+        home.path(),
+        &[
+            "setup",
+            "--non-interactive",
+            "--provider",
+            "cerebras",
+            "--model",
+            "qwen-3.8-27b",
+            "--skip-validation",
+            "--tools",
+            "none",
+        ],
+        &[
+            ("UTHARNESS_HOME", home_str.as_str()),
+            (key_name, key_value.as_str()),
+        ],
+    );
+    assert!(
+        setup.contains("provider:  cerebras"),
+        "setup output: {setup}"
+    );
+
+    // Fresh open in a directory with no utharness.json: the global config
+    // must carry the saved choice instead of autodetecting groq.
+    let mut command = Command::new(bin);
+    command
+        .current_dir(bare.path())
+        .env("HOME", home.path())
+        .env("UTHARNESS_HOME", home.path())
+        .env("UTHARNESS_TOOLS", "none")
+        .env(key_name, &key_value)
+        .env("GROQ_API_KEY", "gsk_test_decoy_key_for_autodetect")
+        .args(["chat", "Reply with exactly: PROVIDER-IS-X"]);
+    let output = command.output().expect("run utharness");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).expect("utf8 output");
+    assert!(
+        text.contains("cerebras/qwen-3.8-27b"),
+        "saved choice lost, got: {text}"
+    );
+}
+
+#[test]
 fn feature_icons_render_glyphs_and_ascii_fallbacks() {
     let workspace = tempdir().unwrap();
     let home = tempdir().unwrap();

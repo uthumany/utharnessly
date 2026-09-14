@@ -1950,41 +1950,58 @@ fn load_runtime_config() -> Result<Option<RuntimeConfig>> {
 }
 
 fn apply_runtime_config() -> Result<()> {
-    let Some(config) = load_runtime_config()? else {
+    // Precedence: explicit env > workspace utharness.json > global
+    // ~/.utharness/config.yaml (every setup writes it) > provider autodetect.
+    // Without the global fallback, opening utharness in any directory other
+    // than the configured workspace silently dropped the saved choice and
+    // autodetect picked whatever key happened to be exported (often groq).
+    if let Some(config) = load_runtime_config()? {
+        if config.schema_version != 1 {
+            anyhow::bail!(
+                "unsupported utharness.json schema version {}",
+                config.schema_version
+            );
+        }
+        if config.provider != "offline" && env::var_os("UTHARNESS_PROVIDER").is_none() {
+            env::set_var("UTHARNESS_PROVIDER", &config.provider);
+        }
+        if config.provider != "offline" && env::var_os("UTHARNESS_MODEL").is_none() {
+            env::set_var("UTHARNESS_MODEL", &config.model);
+        }
+        apply_shared_config(&config.permission_mode, &config.tools, &config.ui);
         return Ok(());
-    };
-    if config.schema_version != 1 {
-        anyhow::bail!(
-            "unsupported utharness.json schema version {}",
-            config.schema_version
-        );
     }
-    if config.provider != "offline" && env::var_os("UTHARNESS_PROVIDER").is_none() {
-        env::set_var("UTHARNESS_PROVIDER", &config.provider);
+    if let Some((provider, model)) = setup_system::load_global_selection() {
+        if provider != "offline" && env::var_os("UTHARNESS_PROVIDER").is_none() {
+            env::set_var("UTHARNESS_PROVIDER", &provider);
+        }
+        if provider != "offline" && env::var_os("UTHARNESS_MODEL").is_none() {
+            env::set_var("UTHARNESS_MODEL", &model);
+        }
     }
-    if config.provider != "offline" && env::var_os("UTHARNESS_MODEL").is_none() {
-        env::set_var("UTHARNESS_MODEL", &config.model);
-    }
+    Ok(())
+}
+
+fn apply_shared_config(permission_mode: &str, tools: &[String], ui: &UiConfig) {
     if env::var_os("UTHARNESS_PERMISSION").is_none() {
-        env::set_var("UTHARNESS_PERMISSION", &config.permission_mode);
+        env::set_var("UTHARNESS_PERMISSION", permission_mode);
     }
     if env::var_os("UTHARNESS_TOOLS").is_none() {
-        env::set_var("UTHARNESS_TOOLS", config.tools.join(","));
+        env::set_var("UTHARNESS_TOOLS", tools.join(","));
     }
     if env::var_os("UTHARNESS_BANNER").is_none() {
         env::set_var(
             "UTHARNESS_BANNER",
-            if config.ui.banner {
-                config.ui.banner_mode.as_str()
+            if ui.banner {
+                ui.banner_mode.as_str()
             } else {
                 "hide"
             },
         );
     }
     if env::var_os("UTHARNESS_ICONS").is_none() {
-        env::set_var("UTHARNESS_ICONS", &config.ui.icons);
+        env::set_var("UTHARNESS_ICONS", &ui.icons);
     }
-    Ok(())
 }
 
 #[cfg(test)]
