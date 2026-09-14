@@ -78,7 +78,7 @@ jobs:
           Copy-Item ui/package.json "dist/package/$root/ui/package.json"
           Copy-Item README.md, LICENSE "dist/package/$root/"
           Compress-Archive -Path "dist/package/$root/*" -DestinationPath "dist/$root.zip" -Force
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: release-${{ matrix.platform }}-${{ matrix.arch }}
           path: dist/*
@@ -135,7 +135,7 @@ jobs:
           dpkg-deb --contents "$deb" | grep -F '/data/data/com.termux/files/usr/bin/utharness'
           dpkg-deb --contents "$deb" | grep -F '/data/data/com.termux/files/usr/lib/utharness/dist/index.js'
           sha256sum -c "$deb.sha256"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: termux-${{ matrix.arch }}
           path: dist/termux/*
