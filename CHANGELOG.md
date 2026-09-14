@@ -4,6 +4,12 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.32] — 2026-09-14
+
+### Fixed
+
+- Release pipeline: Termux jobs used setup-android v3.2.2, which installs the removed `tools` SDK package and fails on current runner images; updated to v4.0.1.
+
 ## [0.2.31] — 2026-09-14
 
 ### Fixed
