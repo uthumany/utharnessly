@@ -54,7 +54,7 @@ with tempfile.TemporaryDirectory(prefix='utharness-interactions-') as state:
         drain(1)
         before = len(data)
         send('wait')
-        expect('Agent working', before)
+        expect('35% Reasoning', before)
         os.write(fd, b'\x03')
         expect('cancelled')
         drain(0.3)

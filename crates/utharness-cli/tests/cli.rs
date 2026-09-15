@@ -789,7 +789,7 @@ fn provider_and_agent_commands_report_real_runtime_state_without_secrets() {
     assert!(provider_env.contains("never persisted"));
 
     let agents = run(bin, workspace.path(), home.path(), &["agents", "list"]);
-    assert!(agents.contains("Uthy"));
+    assert!(agents.contains("UTHARNESS"));
     assert!(agents.contains("SAFE read-only"));
 }
 
@@ -970,7 +970,7 @@ fn chat_streams_from_an_openai_compatible_gateway_and_persists_the_result() {
         ],
     );
     server.join().unwrap();
-    assert!(output.contains("Uthy · custom/fixture-model"));
+    assert!(output.contains("UTHARNESS · custom/fixture-model"));
     assert!(output.contains("live response"));
     assert!(!output.contains("test-secret"));
 

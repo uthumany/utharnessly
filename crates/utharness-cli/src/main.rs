@@ -21,12 +21,18 @@ mod desktop;
 mod execution;
 mod icons;
 mod progress;
+mod response_pipeline;
 mod select;
 mod setup_system;
 mod skills;
 mod termux;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+const AGENT_NAME: &str = "UTHARNESS";
+const AGENT_IDENTITY: &str = "I was developed by: \"UTHUMAN & CO\" Center for AI (UCAI), which is a part of Uthuman Inc Data & AI. Our mission involves driving AI priorities, unifying CLI agent efforts through effective coordination, and implementing research projects. Developers: 𓁷 Uthuman M; 𓁷 Shafiq N; 𓁷 Alid K.";
+
+#[cfg(test)]
+static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[derive(Parser, Debug)]
 #[command(name = "utharness", version = VERSION, about = "Utharness Agent Terminal — local-first autonomous work")]
@@ -687,35 +693,82 @@ fn chat(args: ChatArgs) -> Result<()> {
 }
 
 fn complete_once(app: &App, session: &utharness_core::Session, prompt: &str) -> Result<()> {
+    use response_pipeline::ResponseStage;
+
+    let mut pipeline = response_pipeline::ResponsePipeline::new();
+    pipeline.advance(ResponseStage::Understanding);
+    if io::stdin().is_terminal() && io::stdout().is_terminal() {
+        println!("{} YOU · {prompt}", icons::icon_user());
+    }
     app.storage
         .append_message(session.id, MessageRole::User, prompt)?;
+    pipeline.advance(ResponseStage::Decomposing);
     let mut live = false;
     let memories = recall_block(&app.storage, app.workspace.id, prompt);
-    let system = if memories.is_empty() {
-        "You are Uthy, a concise terminal coding agent. Never claim a command ran unless a tool result proves it.".to_string()
-    } else {
-        format!("You are Uthy, a concise terminal coding agent. Never claim a command ran unless a tool result proves it.\n{memories}")
-    };
-    let response = match Gateway::from_environment() {
+    pipeline.advance(ResponseStage::Retrieving);
+    let system = agent_system_prompt(&memories);
+    pipeline.advance(ResponseStage::Grounding);
+    let messages = [
+        ChatMessage {
+            role: "system".into(),
+            content: system,
+        },
+        ChatMessage {
+            role: "user".into(),
+            content: prompt.to_string(),
+        },
+    ];
+    pipeline.advance(ResponseStage::Planning);
+    let raw_response = match Gateway::from_environment() {
         Ok(provider) => {
             live = true;
-            println!("{} Uthy · {}/{}", agent_marker(), provider.provider(), provider.model());
-            print_agent_loading()?;
+            pipeline.advance(ResponseStage::Reasoning);
+            pipeline.advance(ResponseStage::Routing);
+            println!(
+                "{} {} · {}/{}",
+                icons::icon_agent(),
+                AGENT_NAME,
+                provider.provider(),
+                provider.model()
+            );
+            pipeline.advance(ResponseStage::Executing);
             use std::io::Write;
             io::stdout().flush()?;
+            let mut observed = false;
             let response = provider.complete_streaming(
-                &[ChatMessage { role: "system".into(), content: system }, ChatMessage { role: "user".into(), content: prompt.to_string() }],
-                |delta| { print!("{delta}"); io::stdout().flush()?; Ok(()) },
+                &messages,
+                |delta| {
+                    if !observed {
+                        pipeline.advance(ResponseStage::Observing);
+                        observed = true;
+                    }
+                    print!("{delta}");
+                    io::stdout().flush()?;
+                    Ok(())
+                },
             )?;
+            if !observed {
+                pipeline.advance(ResponseStage::Observing);
+            }
             println!();
             response
         }
-        Err(_error) if !has_provider_configuration() =>
-            format!("Offline planner ready. I received: {prompt}\n\nConfigure a provider with `utharness providers env` to enable live model streaming."),
+        Err(_error) if !has_provider_configuration() => format!(
+            "Offline planner ready. I received: {prompt}\n\nConfigure a provider with `utharness providers env` to enable live model streaming."
+        ),
         Err(error) => return Err(error),
     };
+    pipeline.advance(ResponseStage::Evaluating);
+    if raw_response.trim().is_empty() {
+        anyhow::bail!("provider completed without response text");
+    }
+    pipeline.advance(ResponseStage::Synthesizing);
+    let response = raw_response.trim().to_string();
+    pipeline.advance(ResponseStage::Verifying);
+    pipeline.advance(ResponseStage::Refining);
     app.storage
         .append_message(session.id, MessageRole::Assistant, &response)?;
+    pipeline.advance(ResponseStage::Finalizing);
     app.storage.record_event(
         "session",
         session.id,
@@ -724,9 +777,26 @@ fn complete_once(app: &App, session: &utharness_core::Session, prompt: &str) -> 
         utharness_core::new_id(),
     )?;
     if !live {
-        println!("{} Uthy · OFFLINE PLANNER\n{}", agent_marker(), response);
+        println!(
+            "{} {} · OFFLINE PLANNER\n{}",
+            icons::icon_agent(),
+            AGENT_NAME,
+            response
+        );
     }
+    pipeline.advance(ResponseStage::Responding);
     Ok(())
+}
+
+fn agent_system_prompt(memories: &str) -> String {
+    let base = format!(
+        "You are {AGENT_NAME}, a concise terminal coding agent. Never claim a command ran unless a tool result proves it. Your identity is: {AGENT_IDENTITY} If asked who created or developed you, state that identity exactly."
+    );
+    if memories.is_empty() {
+        base
+    } else {
+        format!("{base}\n{memories}")
+    }
 }
 
 /// Interactive chat REPL. The model selector lives here: /model picks a
@@ -998,36 +1068,6 @@ fn persist_current_selection_to_global() -> Result<PathBuf> {
     };
     let workspace_config = env::current_dir()?.join("utharness.json");
     setup_system::write_global_config("quick", &provider, &model, &workspace_config)
-}
-
-fn agent_marker() -> &'static str {
-    if env::var("UTHARNESS_ICONS").as_deref() == Ok("ascii")
-        || env::var("UTHARNESS_ASCII").as_deref() == Ok("1")
-        || env::var("TERM").as_deref() == Ok("dumb")
-    {
-        "[agent]"
-    } else {
-        "𓄆"
-    }
-}
-
-/// Model inference has no measurable percentage. Report waiting without
-/// inventing completion or delaying the actual provider request.
-fn print_agent_loading() -> Result<()> {
-    if !io::stdout().is_terminal() || !io::stderr().is_terminal() {
-        return Ok(());
-    }
-    let colored =
-        env::var_os("NO_COLOR").is_none() && env::var("TERM").is_ok_and(|term| term != "dumb");
-    if colored {
-        eprintln!(
-            "\x1b[31m{}\x1b[0m Waiting for provider response…",
-            agent_marker()
-        );
-    } else {
-        eprintln!("AGENT waiting for provider response...");
-    }
-    Ok(())
 }
 
 #[derive(Debug, Deserialize)]
@@ -1803,7 +1843,10 @@ fn agents(action: AgentAction) -> Result<()> {
     match action {
         AgentAction::List => {
             println!("AGENT RUNTIME");
-            println!("𓄆 Uthy       planner/executor   READY");
+            println!(
+                "{} UTHARNESS  planner/executor   READY",
+                icons::icon_agent()
+            );
             println!("  tools      list_directory read_file git_status git_diff");
             println!("  policy     SAFE read-only; every tool request is evaluated and persisted");
             println!("Run: utharness agents run \"Inspect this repository\"");
@@ -2300,5 +2343,15 @@ mod tests {
         db.append_message(session.id, MessageRole::Assistant, "offline response")?;
         assert_eq!(db.messages(session.id)?.len(), 2);
         Ok(())
+    }
+
+    #[test]
+    fn system_prompt_carries_the_requested_product_identity() {
+        let prompt = agent_system_prompt("");
+        assert!(prompt.contains("UTHARNESS"));
+        assert!(prompt.contains("\"UTHUMAN & CO\" Center for AI (UCAI)"));
+        for developer in ["𓁷 Uthuman M", "𓁷 Shafiq N", "𓁷 Alid K"] {
+            assert!(prompt.contains(developer), "missing {developer}");
+        }
     }
 }

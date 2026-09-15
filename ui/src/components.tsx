@@ -2,9 +2,10 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import stringWidth from 'string-width';
 import wrapAnsi from 'wrap-ansi';
-import type { ColorMode, Message, OverlayKind, PaletteItem, RuntimeSnapshot, ToolCard } from './types.js';
+import type { ColorMode, IconMode, Message, OverlayKind, PaletteItem, RuntimeSnapshot, ToolCard } from './types.js';
 import { icon, spinnerFrames } from './tui/icons.js';
-import { palette, tone } from './tui/theme.js';
+import { divine, palette, tone } from './tui/theme.js';
+import { pipelineStage, responseProgressBar, type PipelineStageId } from './tui/response-progress.js';
 import { statusBadge } from './tui/status.js';
 
 export { getBreakpoint, getTermuxBreakpoint } from './tui/responsive.js';
@@ -26,15 +27,24 @@ export function ToolCardView({ tool, width, colorMode, tick = 0 }: { tool: ToolC
   return <Box borderStyle="round" borderColor={tone(tool.state === 'running' ? palette.borderFocus : palette.border, colorMode)} paddingX={1} width={Math.max(22, Math.min(width, 82))} flexDirection="column"><Box justifyContent="space-between"><Text color={tone(palette.agent, colorMode)} bold>{tool.kind ?? 'TOOL'}  {tool.name}</Text><Text color={toolTone(tool, colorMode)}>{status}</Text></Box>{tool.state !== 'completed' && tool.detail ? <Text color={tone(palette.text, colorMode)}>{tool.detail}</Text> : null}<Text color={tone(palette.muted, colorMode)}>{tool.metric}{tool.elapsed ? `  ${tool.elapsed}` : ''}</Text></Box>;
 }
 
-const roleMeta = (role: Message['role']) => ({
-  utharness: ['UTHARNESS', palette.error, icon('agent')], you: ['YOU', palette.primary, '○'], system: ['SYSTEM', palette.warning, '!'],
-  agent: ['AGENT', palette.error, icon('agent')], tool: ['TOOL', palette.tool, icon('tool')], memory: ['MEMORY', palette.accent, icon('memory')], error: ['ERROR', palette.error, icon('failed')]
+const roleMeta = (role: Message['role'], useUnicode: boolean) => ({
+  utharness: ['UTHARNESS', divine.glyphWhite, icon('agent', useUnicode)], you: ['YOU', palette.primary, icon('you', useUnicode)], system: ['SYSTEM', palette.warning, '!'],
+  agent: ['AGENT', divine.glyphWhite, icon('agent', useUnicode)], tool: ['TOOL', palette.tool, icon('tool')], memory: ['MEMORY', palette.accent, icon('memory')], error: ['ERROR', palette.error, icon('failed')]
 } as const)[role];
-export function MessageRow({ message, width, colorMode, tick }: { message: Message; width: number; colorMode: ColorMode; tick: number }) {
-  const [name, color, marker] = roleMeta(message.role);
+export function MessageRow({ message, width, colorMode, tick, iconMode = 'unicode' }: { message: Message; width: number; colorMode: ColorMode; tick: number; iconMode?: IconMode }) {
+  const [name, color, marker] = roleMeta(message.role, iconMode !== 'ascii');
   const bodyWidth = Math.max(16, width - 5);
   const body = stringWidth(message.text) > bodyWidth ? wrapAnsi(message.text, bodyWidth, { hard: true }) : message.text;
   return <Box flexDirection="column" marginBottom={1} width={width}><Box justifyContent="space-between"><Text color={tone(color, colorMode)} bold>{marker}  {name}</Text><Text color={tone(palette.muted, colorMode)}>{message.time}</Text></Box><Box paddingLeft={4}><Text color={tone(palette.text, colorMode)}>{body}</Text></Box>{message.tool ? <Box paddingLeft={4} marginTop={1}><ToolCardView tool={message.tool} width={bodyWidth} colorMode={colorMode} tick={tick} /></Box> : null}</Box>;
+}
+
+/** Shows only observed local request lifecycle events. It does not pretend to
+ * know a remote model's token-level progress or ETA. */
+export function ResponsePipeline({ stage, width, colorMode, iconMode }: { stage: PipelineStageId; width: number; colorMode: ColorMode; iconMode: IconMode }) {
+  const current = pipelineStage(stage);
+  const unicode = iconMode !== 'ascii';
+  const barWidth = Math.max(6, Math.min(18, width - 46));
+  return <Text color={tone(palette.muted, colorMode)} wrap="truncate-end"><Text color={tone(divine.glyphWhite, colorMode)}>{icon('agent', unicode)} UTHARNESS</Text>{' '}<Text color={tone(palette.primary, colorMode)}>[{responseProgressBar(current.percent, barWidth, unicode)}]</Text>{' '}{current.percent}% {current.label} · {current.detail}</Text>;
 }
 
 export function StatusBar({ snapshot, width, colorMode }: { snapshot: RuntimeSnapshot; width: number; colorMode: ColorMode }) {

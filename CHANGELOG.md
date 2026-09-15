@@ -2,7 +2,12 @@
 
 All notable changes to utharnessly are documented here.
 
-## [Unreleased]
+## [0.2.36] — 2026-09-15
+
+### Added
+
+- UTHARNESS identity in native chat and the Ink UI: white `𓁬` agent markers, blue `𓁶` user markers, readable ASCII fallbacks, and a system identity for UTHUMAN & CO Center for AI (UCAI) with the listed developer team.
+- A 15-stage request pipeline: Understanding, Decomposing, Retrieving, Grounding, Planning, Reasoning, Routing, Executing, Observing, Evaluating, Synthesizing, Verifying, Refining, Finalizing, and Responding. Its 0–100 bar advances only for observed local request events; it does not fabricate model-token completion or ETA.
 
 ## [0.2.35] — 2026-09-15
 

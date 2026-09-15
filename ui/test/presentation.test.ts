@@ -4,10 +4,11 @@ import { asciiMode, featureFrames, icon, reducedMotion } from '../src/tui/icons.
 import { divine, getColorMode } from '../src/tui/theme.js';
 
 test('requested activity glyphs have printable ASCII alternatives', () => {
-  assert.equal(icon('agent', true), '𓄆');
+  assert.equal(icon('agent', true), '𓁬');
+  assert.equal(icon('you', true), '𓁶');
   assert.equal(icon('selector', true), '𓆃');
   assert.equal(icon('blinker', true), '𓇩');
-  for (const name of ['agent', 'selector', 'blinker'] as const) assert.match(icon(name, false), /^[\x20-\x7e]+$/);
+  for (const name of ['agent', 'you', 'selector', 'blinker'] as const) assert.match(icon(name, false), /^[\x20-\x7e]+$/);
 });
 test('feature hieroglyphs map to bracketed ASCII fallbacks', () => {
   assert.equal(icon('computer', true), '𓂀');

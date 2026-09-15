@@ -3,7 +3,7 @@ if [ "$1" = models ] && [ "$2" = list ] && [ "$3" = --json ]; then
   printf '{"provider":"groq","active":"groq/model-a","models":["model-b","model-a"]}\n'
   exit 0
 fi
-if [ "$3" = wait ]; then
+if { [ "$1" = chat ] && [ "$2" = wait ]; } || { [ "$1" = agents ] && [ "$3" = wait ]; }; then
   exec sleep 60
 fi
 if [ "$3" = route ]; then

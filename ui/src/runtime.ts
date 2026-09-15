@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { runtimeBinary } from './runtime-binary.js';
 import { parseModelCatalog } from './setup.js';
 import type { Message, RuntimeSnapshot, ToolCard } from './types.js';
+import type { PipelineStageId } from './tui/response-progress.js';
 
 const runtimeSchema = z.object({
   workspace: z.string(),
@@ -157,7 +158,7 @@ export async function runSkillCommand(args: string[], cwd = process.cwd()): Prom
   }
 }
 
-export type AgentOptions = { provider?: string; model?: string; signal?: AbortSignal };
+export type AgentOptions = { provider?: string; model?: string; signal?: AbortSignal; onStage?: (stage: PipelineStageId) => void };
 
 export async function runRuntimeCommand(args: string[], cwd = process.cwd(), provider?: string): Promise<string> {
   const result = await execa(runtimeBinary(cwd), args, { cwd, reject: false, timeout: 30_000, env: provider ? { UTHARNESS_PROVIDER: provider } : {} });
@@ -176,16 +177,29 @@ export async function submitAgent(prompt: string, cwd = process.cwd(), options: 
   } catch {
     throw new Error('Agent runtime unavailable. Reinstall UTHARNESS or set UTHARNESS_RUNTIME_BIN.');
   }
+  options.onStage?.('decomposing');
+  options.onStage?.('retrieving');
+  options.onStage?.('grounding');
+  options.onStage?.('planning');
+  options.onStage?.('reasoning');
+  options.onStage?.('routing');
+  options.onStage?.('executing');
   const result = await execa(binary, ['agents', 'run', prompt, '--workspace', cwd], {
     cwd, reject: false, timeout: 600_000, cancelSignal: options.signal, forceKillAfterDelay: 1000,
     env: { ...(options.provider ? { UTHARNESS_PROVIDER: options.provider } : {}), ...(options.model ? { UTHARNESS_MODEL: options.model } : {}) },
   });
   if (options.signal?.aborted) throw new Error('Agent operation cancelled.');
+  options.onStage?.('observing');
   if (result.exitCode !== 0) {
     throw new Error(result.stderr.trim() || `Agent runtime exited with status ${result.exitCode}.`);
   }
+  options.onStage?.('evaluating');
   const text = result.stdout.trim();
+  options.onStage?.('synthesizing');
   if (!text) throw new Error('Agent runtime completed without output.');
+  options.onStage?.('verifying');
+  options.onStage?.('refining');
+  options.onStage?.('finalizing');
   return { text };
 }
 
@@ -202,18 +216,31 @@ export async function submitChat(prompt: string, cwd = process.cwd(), options: A
   } catch {
     throw new Error('Chat runtime unavailable. Reinstall UTHARNESS or set UTHARNESS_RUNTIME_BIN.');
   }
+  options.onStage?.('decomposing');
+  options.onStage?.('retrieving');
+  options.onStage?.('grounding');
+  options.onStage?.('planning');
+  options.onStage?.('reasoning');
+  options.onStage?.('routing');
+  options.onStage?.('executing');
   const result = await execa(binary, ['chat', prompt], {
     cwd, reject: false, timeout: 120_000, cancelSignal: options.signal, forceKillAfterDelay: 1000,
     env: { ...(options.provider ? { UTHARNESS_PROVIDER: options.provider } : {}), ...(options.model ? { UTHARNESS_MODEL: options.model } : {}) },
   });
   if (options.signal?.aborted) throw new Error('Chat operation cancelled.');
+  options.onStage?.('observing');
   if (result.exitCode !== 0) {
     throw new Error(result.stderr.trim() || `Chat runtime exited with status ${result.exitCode}.`);
   }
+  options.onStage?.('evaluating');
   const lines = result.stdout.trim().split('\n');
-  if (lines.length && lines[0]?.includes('Uthy ·')) lines.shift();
+  if (lines.length && (lines[0]?.includes('UTHARNESS ·') || lines[0]?.includes('Uthy ·'))) lines.shift();
   const text = lines.join('\n').trim();
+  options.onStage?.('synthesizing');
   if (!text) throw new Error('Chat runtime completed without output.');
+  options.onStage?.('verifying');
+  options.onStage?.('refining');
+  options.onStage?.('finalizing');
   return { text };
 }
 

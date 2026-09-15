@@ -192,6 +192,14 @@ utharness desktop CMD --allow      Explicit desktop control (screenshot, click, 
 utharness tools                    List registered tools and policy modes
 ```
 
+### Chat identity and activity feedback
+
+When asked who developed it, UTHARNESS identifies itself as developed by **"UTHUMAN & CO" Center for AI (UCAI)**, part of Uthuman Inc Data & AI, and names `𓁷 Uthuman M`, `𓁷 Shafiq N`, and `𓁷 Alid K` as developers.
+
+Native chat and the Ink UI use a white `𓁬` marker for **UTHARNESS** and a blue `𓁶` marker for **YOU**. `UTHARNESS_ASCII=1`, `UTHARNESS_ICONS=ascii`, `NO_COLOR`, and dumb terminals retain readable ASCII/monochrome fallbacks. Terminal cells do not support pixel-sized glyphs, so markers adapt to the active terminal font and cell geometry.
+
+While a response is active, the UI displays a 15-stage, 0–100 request-pipeline bar: Understanding → Decomposing → Retrieving → Grounding → Planning → Reasoning → Routing → Executing → Observing → Evaluating → Synthesizing → Verifying → Refining → Finalizing → Responding. Its percentage covers local, observable lifecycle events only; it holds during remote generation rather than inventing token progress or an ETA.
+
 Desktop control is intentionally opt-in, like shell execution:
 
 ```bash
@@ -214,6 +222,12 @@ is set — 𓂀 computer use, 𓋹 self-improvement, 𓏞 memory, 𓉐 build, �
 The interactive setup animates these during the environment scan (4 FPS, frozen
 under `UTHARNESS_REDUCED_MOTION=1`), and `utharness update` draws a matching
 gradient progress bar with byte counts and ETA on stderr.
+
+Conversation identity markers are white `𓁬 UTHARNESS` and blue `𓁶 YOU`
+(` [agent]` and `[you]` in ASCII mode). Live chats also show a 15-stage request
+pipeline from Understanding through Responding. Its 0–100 value tracks only
+observable local lifecycle events; remote model token progress and ETA are not
+known and are never fabricated.
 
 Live model setup, provider defaults, local endpoints, and the credential-safety contract are documented in [`docs/providers.md`](./docs/providers.md).
 

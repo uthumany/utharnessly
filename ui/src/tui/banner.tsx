@@ -56,7 +56,7 @@ export function bannerHeight(tier: BannerTier): number {
 
 const iconSets: Record<IconMode, Record<string, string>> = {
   nerd: { agents: '󰚩', models: '󰆧', skills: '', mcp: '󰘬', memory: '', tools: '󰒓', terminal: '' },
-  unicode: { agents: '𓄆', models: '◇', skills: '</>', mcp: '⎇', memory: '▤', tools: '⚒', terminal: '>_' },
+  unicode: { agents: '𓁬', models: '◇', skills: '</>', mcp: '⎇', memory: '▤', tools: '⚒', terminal: '>_' },
   ascii: { agents: '[A]', models: '[M]', skills: '[S]', mcp: '[C]', memory: '[D]', tools: '[T]', terminal: '>_' }
 };
 

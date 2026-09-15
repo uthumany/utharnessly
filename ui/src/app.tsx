@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useApp, useInput, useStdout } from 'ink';
 import type { FSWatcher } from 'chokidar';
-import { bannerHeight, Inspector, MessageRow, Navigation, Overlay, palette, PersistentHeader, StartupTips, StatusBar, WorkspaceWarning } from './components.js';
+import { bannerHeight, Inspector, MessageRow, Navigation, Overlay, palette, PersistentHeader, ResponsePipeline, StartupTips, StatusBar, WorkspaceWarning } from './components.js';
 import { loadSnapshot, loadModelCatalog, runRuntimeCommand, submitAgent, submitChat, watchRuntime } from './runtime.js';
 import { localCommandArgs, routePrompt } from './commands.js';
 import { Composer } from './tui/composer.js';
@@ -11,6 +11,7 @@ import { effectiveLayout, getBreakpoint, getTermuxBreakpoint, workspaceWidths } 
 import { bannerTier } from './tui/banner.js';
 import { defaultUiState, loadUiState, saveUiState } from './tui/state.js';
 import { getColorMode, tone } from './tui/theme.js';
+import type { PipelineStageId } from './tui/response-progress.js';
 import type { Message, OverlayKind, PaletteItem, PersistedUiState, RuntimeSnapshot, ToolCard } from './types.js';
 
 const commands: PaletteItem[] = [
@@ -81,6 +82,7 @@ export function App() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [streaming, setStreaming] = useState(false);
+  const [responseStage, setResponseStage] = useState<PipelineStageId | null>(null);
   const activeRequest = useRef<AbortController | null>(null);
   useEffect(() => () => { activeRequest.current?.abort(); }, []);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
@@ -194,15 +196,19 @@ export function App() {
     setMessages(current => unique([...current, userMessage]));
     setTick(0);
     setStreaming(true);
+    setResponseStage('understanding');
     const controller = new AbortController();
     activeRequest.current = controller;
-    const backend: Promise<{ text: string; tool?: ToolCard }> = useAgent ? submitAgent(effective, process.cwd(), { provider: ui.selectedProvider ?? snapshot?.provider, model: ui.selectedModel ?? snapshot?.model, signal: controller.signal }) : submitChat(effective, process.cwd(), { provider: ui.selectedProvider ?? snapshot?.provider, model: ui.selectedModel ?? snapshot?.model, signal: controller.signal });
+    const onStage = (stage: PipelineStageId) => { if (!controller.signal.aborted) setResponseStage(stage); };
+    const backend: Promise<{ text: string; tool?: ToolCard }> = useAgent ? submitAgent(effective, process.cwd(), { provider: ui.selectedProvider ?? snapshot?.provider, model: ui.selectedModel ?? snapshot?.model, signal: controller.signal, onStage }) : submitChat(effective, process.cwd(), { provider: ui.selectedProvider ?? snapshot?.provider, model: ui.selectedModel ?? snapshot?.model, signal: controller.signal, onStage });
     void backend.then(response => {
       if (controller.signal.aborted) return;
       const id = `${Date.now()}-assistant`;
       setMessages(current => unique([...current, { id, role: 'utharness', text: response.text, time: now(), tool: response.tool }]));
       setScrollOffset(0);
-    }).catch(error => setMessages(current => unique([...current, { id: `${Date.now()}-error`, role: controller.signal.aborted ? 'system' : 'error', text: error instanceof Error ? error.message : String(error), time: now() }]))).finally(() => { if (activeRequest.current === controller) { activeRequest.current = null; setStreaming(false); } });
+      setResponseStage('responding');
+      setTimeout(() => setResponseStage(current => current === 'responding' ? null : current), 900);
+    }).catch(error => { setResponseStage(null); setMessages(current => unique([...current, { id: `${Date.now()}-error`, role: controller.signal.aborted ? 'system' : 'error', text: error instanceof Error ? error.message : String(error), time: now() }])); }).finally(() => { if (activeRequest.current === controller) { activeRequest.current = null; setStreaming(false); } });
   };
 
   const activateSelected = () => {
@@ -238,7 +244,7 @@ export function App() {
 
   const pageIndex = Math.max(0, pages.length - 1 - scrollOffset);
   const visibleMessages = pages.slice(pageIndex, pageIndex + 1);
-  const chat = <Box flexDirection="column" width={chatWidth} height={chatHeight} overflow="hidden" paddingX={mode === 'workspace' ? 1 : 0}>{runtimeError ? <Text color={tone(palette.error, colorMode)}>Runtime: {runtimeError}</Text> : null}{visibleMessages.map(message => <MessageRow key={message.id} message={message} width={mode === 'workspace' ? chatWidth - 3 : chatWidth} colorMode={colorMode} tick={tick} />)}{streaming ? <Text color={tone(palette.primary, colorMode)} wrap="truncate-end"><Text color={tone(palette.error, colorMode)} dimColor={!ui.reducedMotion && tick % 2 === 1}>{icon('blinker', ui.iconMode !== 'ascii')}</Text> Agent working · Ctrl+C cancels</Text> : null}</Box>;
+  const chat = <Box flexDirection="column" width={chatWidth} height={chatHeight} overflow="hidden" paddingX={mode === 'workspace' ? 1 : 0}>{runtimeError ? <Text color={tone(palette.error, colorMode)}>Runtime: {runtimeError}</Text> : null}{visibleMessages.map(message => <MessageRow key={message.id} message={message} width={mode === 'workspace' ? chatWidth - 3 : chatWidth} colorMode={colorMode} tick={tick} iconMode={ui.iconMode} />)}{responseStage ? <ResponsePipeline stage={responseStage} width={messageWidth} colorMode={colorMode} iconMode={ui.iconMode} /> : null}{streaming && !responseStage ? <Text color={tone(palette.primary, colorMode)} wrap="truncate-end"><Text color={tone(palette.error, colorMode)} dimColor={!ui.reducedMotion && tick % 2 === 1}>{icon('blinker', ui.iconMode !== 'ascii')}</Text> Agent working · Ctrl+C cancels</Text> : null}</Box>;
 
   return <Box flexDirection="column" width={columns} height={rows - 1} paddingX={compact ? 0 : 1}>
     <Box flexShrink={0} height={headerHeight}><PersistentHeader width={headerWidth} rows={rows} mode={ui.bannerMode} colorMode={colorMode} iconMode={ui.iconMode} /></Box>

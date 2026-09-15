@@ -24,6 +24,8 @@ pub const PLAN_TERRA: (u8, u8, u8) = (224, 122, 95); // #E07A5F
 pub const ADZE_SAND: (u8, u8, u8) = (233, 196, 106); // #E9C46A
 /// Default icon ink: white glyphs on dark terminals.
 pub const GLYPH_WHITE: (u8, u8, u8) = (255, 255, 255);
+/// User marker ink for interactive conversation rows.
+pub const USER_BLUE: (u8, u8, u8) = (73, 215, 255);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Feature {
@@ -90,6 +92,35 @@ pub fn ascii_mode() -> bool {
         || std::env::var("UTHARNESS_ASCII")
             .map(|v| v == "1")
             .unwrap_or(false)
+        || std::env::var("UTHARNESS_ICONS")
+            .map(|v| v == "ascii")
+            .unwrap_or(false)
+}
+
+/// UTHARNESS's single-cell identity, with a readable fallback.
+pub fn agent_marker() -> &'static str {
+    if ascii_mode() {
+        "[agent]"
+    } else {
+        "𓁬"
+    }
+}
+
+/// The human user's single-cell identity, with a readable fallback.
+pub fn user_marker() -> &'static str {
+    if ascii_mode() {
+        "[you]"
+    } else {
+        "𓁶"
+    }
+}
+
+pub fn icon_agent() -> String {
+    ink(agent_marker(), GLYPH_WHITE)
+}
+
+pub fn icon_user() -> String {
+    ink(user_marker(), USER_BLUE)
 }
 
 /// The display cell for a feature: glyph, or ASCII tag in plain mode.
@@ -143,10 +174,18 @@ mod tests {
 
     #[test]
     fn plain_mode_passes_text_through_undecorated() {
+        let _guard = crate::ENV_LOCK.lock().expect("test environment lock");
         std::env::set_var("UTHARNESS_ASCII", "1");
         assert_eq!(cell(Feature::Computer), "[eye]");
         assert_eq!(ink("x", GLYPH_WHITE), "x");
         std::env::remove_var("UTHARNESS_ASCII");
         assert_eq!(cell(Feature::Computer), "\u{13080}");
+    }
+
+    #[test]
+    fn conversation_markers_match_the_product_identity() {
+        let _guard = crate::ENV_LOCK.lock().expect("test environment lock");
+        assert_eq!(agent_marker(), "𓁬");
+        assert_eq!(user_marker(), "𓁶");
     }
 }

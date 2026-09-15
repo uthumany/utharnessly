@@ -172,6 +172,7 @@ mod tests {
 
     #[test]
     fn ascii_mode_reports_no_depth() {
+        let _guard = crate::ENV_LOCK.lock().expect("test environment lock");
         std::env::set_var("UTHARNESS_ASCII", "1");
         assert_eq!(color_depth(), 0);
         std::env::remove_var("UTHARNESS_ASCII");
