@@ -21,6 +21,7 @@ mod desktop;
 mod execution;
 mod icons;
 mod progress;
+mod select;
 mod setup_system;
 mod skills;
 mod termux;
@@ -195,7 +196,9 @@ impl Default for UiConfig {
 
 #[derive(Args, Debug)]
 struct ChatArgs {
-    prompt: String,
+    /// Prompt to answer once. Omit to enter the interactive chat REPL,
+    /// where /model switches provider and model mid-session.
+    prompt: Option<String>,
     #[arg(long)]
     session: Option<String>,
 }
@@ -677,10 +680,17 @@ fn chat(args: ChatArgs) -> Result<()> {
     } else {
         app.ensure_session("Terminal session")?
     };
+    match args.prompt {
+        Some(prompt) => complete_once(&app, &session, &prompt),
+        None => chat_repl(&app, &session),
+    }
+}
+
+fn complete_once(app: &App, session: &utharness_core::Session, prompt: &str) -> Result<()> {
     app.storage
-        .append_message(session.id, MessageRole::User, &args.prompt)?;
+        .append_message(session.id, MessageRole::User, prompt)?;
     let mut live = false;
-    let memories = recall_block(&app.storage, app.workspace.id, &args.prompt);
+    let memories = recall_block(&app.storage, app.workspace.id, prompt);
     let system = if memories.is_empty() {
         "You are Uthy, a concise terminal coding agent. Never claim a command ran unless a tool result proves it.".to_string()
     } else {
@@ -694,14 +704,14 @@ fn chat(args: ChatArgs) -> Result<()> {
             use std::io::Write;
             io::stdout().flush()?;
             let response = provider.complete_streaming(
-                &[ChatMessage { role: "system".into(), content: system }, ChatMessage { role: "user".into(), content: args.prompt.clone() }],
+                &[ChatMessage { role: "system".into(), content: system }, ChatMessage { role: "user".into(), content: prompt.to_string() }],
                 |delta| { print!("{delta}"); io::stdout().flush()?; Ok(()) },
             )?;
             println!();
             response
         }
         Err(_error) if !has_provider_configuration() =>
-            format!("Offline planner ready. I received: {}\n\nConfigure a provider with `utharness providers env` to enable live model streaming.", args.prompt),
+            format!("Offline planner ready. I received: {prompt}\n\nConfigure a provider with `utharness providers env` to enable live model streaming."),
         Err(error) => return Err(error),
     };
     app.storage
@@ -717,6 +727,233 @@ fn chat(args: ChatArgs) -> Result<()> {
         println!("{} Uthy · OFFLINE PLANNER\n{}", agent_marker(), response);
     }
     Ok(())
+}
+
+/// Interactive chat REPL. The model selector lives here: /model picks a
+/// provider then a model, applies it to the running session immediately,
+/// and optionally persists it so the next open reuses it.
+fn chat_repl(app: &App, session: &utharness_core::Session) -> Result<()> {
+    print_current_selection("Chatting with");
+    println!("Commands: /model · /where · /save · /help · /quit");
+    use std::io::BufRead as _;
+    // One stdin lock for the whole REPL, shared with the picker: re-locking
+    // stdin on this thread deadlocks, and fresh per-line locks would drop
+    // buffered piped input.
+    let stdin = io::stdin();
+    let mut input = stdin.lock();
+    loop {
+        let mut line = String::new();
+        let bytes = input.read_line(&mut line)?;
+        if bytes == 0 {
+            break; // EOF (piped input exhausted)
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        match trimmed {
+            "/quit" | "/exit" | "/q" => break,
+            "/help" | "/h" | "/?" => {
+                println!("  /model   pick provider + model for this session (applies now)");
+                println!("  /where   show the active provider/model and where it came from");
+                println!("  /save    persist the current selection (workspace or global)");
+                println!("  /quit    leave the chat");
+            }
+            "/where" => print_current_selection("Active"),
+            "/model" | "/provider" | "/m" => {
+                if let Err(error) = model_selector_flow(&mut input) {
+                    println!("Model selector failed: {error:#}");
+                }
+            }
+            "/save" => {
+                if let Err(error) = persist_current_selection(&mut input) {
+                    println!("Save failed: {error:#}");
+                }
+            }
+            _ if trimmed.starts_with('/') => println!("Unknown command. Try /help."),
+            _ => {
+                if let Err(error) = complete_once(app, session, trimmed) {
+                    println!("Error: {error:#}");
+                }
+            }
+        }
+    }
+    println!("Bye.");
+    Ok(())
+}
+
+fn current_selection() -> (String, String) {
+    let provider = env::var("UTHARNESS_PROVIDER")
+        .ok()
+        .filter(|v| !v.trim().is_empty());
+    let from_env = provider.is_some();
+    let provider = provider.unwrap_or_else(|| {
+        load_runtime_config()
+            .ok()
+            .flatten()
+            .map(|c| c.provider)
+            .or_else(|| setup_system::load_global_selection().map(|(p, _)| p))
+            .unwrap_or_else(|| "autodetect".into())
+    });
+    let model = env::var("UTHARNESS_MODEL")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| {
+            if from_env {
+                String::new()
+            } else {
+                load_runtime_config()
+                    .ok()
+                    .flatten()
+                    .map(|c| c.model)
+                    .or_else(|| setup_system::load_global_selection().map(|(_, m)| m))
+                    .unwrap_or_default()
+            }
+        });
+    (provider, model)
+}
+
+fn print_current_selection(verb: &str) {
+    let (provider, model) = current_selection();
+    if model.is_empty() {
+        println!("{verb} provider {provider} (model: provider default)");
+    } else {
+        println!("{verb} {provider}/{model}");
+    }
+}
+
+/// Two-stage picker: provider first (keyed providers on top), then a live
+/// model list with the provider default as fallback. Applies immediately via
+/// process env; persistence is offered, never forced.
+fn model_selector_flow(input: &mut impl std::io::BufRead) -> Result<()> {
+    let mut statuses = utharness_provider::supported_providers();
+    statuses.sort_by_key(|status| (!status.configured, status.provider.clone()));
+    let provider_items: Vec<select::PickItem> = statuses
+        .iter()
+        .map(|status| {
+            let state = if status.configured {
+                "key ready"
+            } else {
+                "needs key"
+            };
+            select::PickItem::new(
+                status.provider.clone(),
+                format!("{} · default {}", state, status.model),
+            )
+        })
+        .collect();
+    let Some(provider_at) =
+        select::pick_with_reader("Select AI provider", &provider_items, &mut *input)?
+    else {
+        println!("Kept the current selection.");
+        return Ok(());
+    };
+    let status = &statuses[provider_at];
+    env::set_var("UTHARNESS_PROVIDER", &status.provider);
+    env::remove_var("UTHARNESS_MODEL");
+
+    let gateway =
+        Gateway::new_from_environment(utharness_provider::ProviderKind::parse(&status.provider)?);
+    let models: Vec<String> = gateway
+        .ok()
+        .and_then(|gateway| gateway.models().ok())
+        .filter(|list| !list.is_empty())
+        .unwrap_or_else(|| vec![status.model.clone()]);
+    let model_items: Vec<select::PickItem> = models
+        .iter()
+        .map(|model| {
+            let mark = if *model == status.model {
+                "provider default"
+            } else {
+                "live catalog"
+            };
+            select::PickItem::new(model.clone(), mark)
+        })
+        .collect();
+    let Some(model_at) = select::pick_with_reader(
+        &format!("Select model for {}", status.provider),
+        &model_items,
+        &mut *input,
+    )?
+    else {
+        println!("Kept {}.", status.provider);
+        return Ok(());
+    };
+    env::set_var("UTHARNESS_MODEL", &models[model_at]);
+    println!("Now chatting with {}/{}", status.provider, models[model_at]);
+
+    let save_items = vec![
+        select::PickItem::new("Session only", "forgotten when this chat exits"),
+        select::PickItem::new("Workspace file", "./utharness.json when one exists"),
+        select::PickItem::new("Global config", "~/.utharness/config.yaml everywhere"),
+    ];
+    match select::pick_with_reader("Persist this selection", &save_items, &mut *input)? {
+        Some(1) => persist_current_selection_to_workspace()
+            .map(|path| println!("Saved to {}", path.display()))?,
+        Some(2) => persist_current_selection_to_global()
+            .map(|path| println!("Saved to {}", path.display()))?,
+        _ => println!("Session-only: reopening utharness elsewhere keeps the previous files."),
+    }
+    Ok(())
+}
+
+fn persist_current_selection(input: &mut impl std::io::BufRead) -> Result<()> {
+    let save_items = vec![
+        select::PickItem::new("Workspace file", "./utharness.json when one exists"),
+        select::PickItem::new("Global config", "~/.utharness/config.yaml everywhere"),
+    ];
+    match select::pick_with_reader("Persist the current selection", &save_items, input)? {
+        Some(0) => persist_current_selection_to_workspace()
+            .map(|path| println!("Saved to {}", path.display()))?,
+        Some(1) => persist_current_selection_to_global()
+            .map(|path| println!("Saved to {}", path.display()))?,
+        _ => println!("Not saved."),
+    }
+    Ok(())
+}
+
+fn persist_current_selection_to_workspace() -> Result<PathBuf> {
+    let (provider, _) = current_selection();
+    if provider == "autodetect" {
+        anyhow::bail!("no provider selected yet — use /model first");
+    }
+    let path = env::current_dir()?.join("utharness.json");
+    let mut config = load_runtime_config()?.unwrap_or(RuntimeConfig {
+        schema_version: 1,
+        mode: "quick".into(),
+        provider: "openrouter".into(),
+        model: "openrouter/free".into(),
+        permission_mode: "safe".into(),
+        tools: vec!["workspace_read".into()],
+        ui: UiConfig::default(),
+    });
+    let (provider, model) = current_selection();
+    config.provider = provider;
+    if !model.is_empty() {
+        config.model = model;
+    }
+    fs::write(
+        &path,
+        format!("{}\n", serde_json::to_string_pretty(&config)?),
+    )
+    .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(path)
+}
+
+fn persist_current_selection_to_global() -> Result<PathBuf> {
+    let (provider, model) = current_selection();
+    if provider == "autodetect" {
+        anyhow::bail!("no provider selected yet — use /model first");
+    }
+    let model = if model.is_empty() {
+        utharness_provider::ProviderKind::parse(&provider)
+            .map(|kind| Gateway::status_from_environment(kind).model)
+            .unwrap_or_else(|_| "default".into())
+    } else {
+        model
+    };
+    let workspace_config = env::current_dir()?.join("utharness.json");
+    setup_system::write_global_config("quick", &provider, &model, &workspace_config)
 }
 
 fn agent_marker() -> &'static str {

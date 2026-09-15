@@ -4,6 +4,10 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Interactive chat REPL: run `utharness chat` with no prompt for a live session with `/model` (two-stage provider → model picker with key status and live catalogs, applies instantly), `/where` (active selection), `/save` (persist to workspace or global config), `/help`, `/quit`. Arrow-key picker on live terminals, numbered fallback when piped.
+
 ## [0.2.33] — 2026-09-14
 
 ### Fixed

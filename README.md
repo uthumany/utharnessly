@@ -162,6 +162,7 @@ The interactive capture matrix covers `20`, `30`, `40`, `60`, `80`, `100`, `120`
 utharness                          Open the Ink TUI when attached to a terminal
 utharness init [--workspace PATH]  Initialize a local workspace
 utharness chat PROMPT              Stream a live response or use the offline planner
+utharness chat                   Interactive chat REPL with /model selector, /where, /save
 utharness run --command CMD        Refuse shell execution unless explicitly allowed
 utharness tui [--headless]         Open the UI or print non-interactive status
 utharness autonomous PROMPT        Run bounded SAFE inspection through the active gateway

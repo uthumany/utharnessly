@@ -324,6 +324,83 @@ fn saved_provider_survives_outside_the_workspace() {
 }
 
 #[test]
+fn chat_repl_answers_where_and_messages_without_a_prompt_arg() {
+    // Live REPL plumbing: /where reflects saved files, a plain line gets a
+    // live reply, /quit exits. Skips where no provider key is available.
+    let key_value = match std::env::var("CEREBRAS_API_KEY")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+    {
+        Some(value) => value,
+        None => {
+            eprintln!("SKIP: set CEREBRAS_API_KEY to run the live REPL test");
+            return;
+        }
+    };
+    let configured = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    let bin = env!("CARGO_BIN_EXE_utharness");
+    let home_str = home.path().to_str().unwrap().to_string();
+
+    let setup = run_with_env(
+        bin,
+        configured.path(),
+        home.path(),
+        &[
+            "setup",
+            "--non-interactive",
+            "--provider",
+            "cerebras",
+            "--model",
+            "qwen-3.8-27b",
+            "--skip-validation",
+            "--tools",
+            "none",
+        ],
+        &[
+            ("UTHARNESS_HOME", home_str.as_str()),
+            ("CEREBRAS_API_KEY", key_value.as_str()),
+        ],
+    );
+    assert!(
+        setup.contains("provider:  cerebras"),
+        "setup output: {setup}"
+    );
+
+    let mut child = Command::new(bin)
+        .current_dir(configured.path())
+        .env("HOME", home.path())
+        .env("UTHARNESS_HOME", home.path())
+        .env("UTHARNESS_TOOLS", "none")
+        .env("CEREBRAS_API_KEY", &key_value)
+        .arg("chat")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn utharness");
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"/where\nReply with exactly: OK\n/quit\n")
+        .unwrap();
+    let output = child.wait_with_output().expect("wait utharness");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).expect("utf8 output");
+    assert!(
+        text.contains("cerebras/qwen-3.8-27b"),
+        "/where lost the selection: {text}"
+    );
+    assert!(text.contains("OK"), "live reply missing: {text}");
+    assert!(text.contains("Bye."), "clean exit missing: {text}");
+}
+
+#[test]
 fn feature_icons_render_glyphs_and_ascii_fallbacks() {
     let workspace = tempdir().unwrap();
     let home = tempdir().unwrap();
