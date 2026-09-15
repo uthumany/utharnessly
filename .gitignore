@@ -11,3 +11,6 @@
 /ui/dist/
 /ui/node_modules/
 /packages/utharnessly-npm/node_modules/
+
+# local runtime selection (never commit personal provider choices)
+utharness.json
