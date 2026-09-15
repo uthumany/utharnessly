@@ -1,6 +1,6 @@
 {
   "name": "utharnessly",
-  "version": "0.2.36",
+  "version": "0.2.37",
   "description": "Cross-platform launcher for the utharness local-first agent terminal",
   "license": "MIT",
   "private": false,

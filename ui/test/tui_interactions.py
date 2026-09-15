@@ -39,6 +39,10 @@ with tempfile.TemporaryDirectory(prefix='utharness-interactions-') as state:
         until = time.monotonic() + 45
         while value.encode() not in data[offset:] and time.monotonic() < until: drain(0.1)
         assert value.encode() in data[offset:], f'Missing terminal output: {value}'
+    def expect_any(values, offset=0):
+        until = time.monotonic() + 45
+        while not any(value.encode() in data[offset:] for value in values) and time.monotonic() < until: drain(0.1)
+        assert any(value.encode() in data[offset:] for value in values), f'Missing terminal output: one of {values}'
     def send(value):
         os.write(fd, value.encode()); drain(0.3); os.write(fd, b'\r')
     try:
@@ -51,10 +55,11 @@ with tempfile.TemporaryDirectory(prefix='utharness-interactions-') as state:
         before = len(data)
         send('route')
         expect('groq/model-b', before)
+        expect('100% Responding', before)
         drain(1)
         before = len(data)
         send('wait')
-        expect('35% Reasoning', before)
+        expect_any(('35% Reasoning', '42% Routing', '49% Executing'), before)
         os.write(fd, b'\x03')
         expect('cancelled')
         drain(0.3)

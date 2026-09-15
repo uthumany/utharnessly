@@ -8,8 +8,8 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-
-const VERSION = '0.2.35';
+const packageMetadata = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8'));
+const VERSION = packageMetadata.version;
 const REPOSITORY = 'uthumany/utharnessly';
 const BASE_URL = (process.env.UTHARNESSLY_RELEASE_BASE_URL || `https://github.com/${REPOSITORY}/releases/download/v${VERSION}`).replace(/\/$/, '');
 

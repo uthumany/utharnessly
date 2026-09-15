@@ -2,6 +2,12 @@
 
 All notable changes to utharnessly are documented here.
 
+## [0.2.37] — 2026-09-15
+
+### Fixed
+
+- npm launcher release resolution now reads its own package metadata instead of retaining a hard-coded release tag. A regression test verifies `utharnessly --version` always matches `package.json`, preventing a package from downloading a previous native release.
+
 ## [0.2.36] — 2026-09-15
 
 ### Added
