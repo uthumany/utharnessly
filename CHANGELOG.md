@@ -4,6 +4,14 @@ All notable changes to utharnessly are documented here.
 
 ## [Unreleased]
 
+## [0.2.35] — 2026-09-15
+
+### Fixed
+
+- Empty `UTHARNESS_MODEL` values now fall back to the selected provider's default instead of sending invalid blank model IDs to the API.
+- Provider status and the chat selector now keep each provider's own default model. A generic `UTHARNESS_API_KEY` only marks the explicitly selected provider as configured; it no longer incorrectly marks all providers key-ready.
+- `/where` now reports separate provider and model origins: environment, workspace config, global config, autodetection, or provider default.
+
 ## [0.2.34] — 2026-09-15
 
 ### Added

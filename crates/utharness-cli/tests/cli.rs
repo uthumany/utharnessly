@@ -49,6 +49,110 @@ fn run_with_env(
     String::from_utf8(output.stdout).expect("utf8 output")
 }
 
+/// Use a blank environment for configuration precedence tests so host keys,
+/// persisted secrets, and the developer's current selection cannot mask bugs.
+fn run_clean_with_env(
+    bin: &str,
+    cwd: &std::path::Path,
+    home: &std::path::Path,
+    args: &[&str],
+    input: Option<&str>,
+    extra_env: &[(&str, &str)],
+) -> String {
+    let mut command = Command::new(bin);
+    command
+        .env_clear()
+        .env("PATH", std::env::var("PATH").expect("PATH"))
+        .env("HOME", home)
+        .env("UTHARNESS_HOME", home.join(".utharness"))
+        .env("NO_COLOR", "1")
+        .current_dir(cwd)
+        .args(args)
+        .stdin(if input.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    for (key, value) in extra_env {
+        command.env(key, value);
+    }
+    let mut child = command.spawn().expect("spawn utharness");
+    if let Some(input) = input {
+        child
+            .stdin
+            .as_mut()
+            .expect("piped stdin")
+            .write_all(input.as_bytes())
+            .expect("write stdin");
+    }
+    let output = child.wait_with_output().expect("wait utharness");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).expect("utf8 output")
+}
+
+#[test]
+fn generic_key_is_scoped_and_statuses_keep_provider_defaults() {
+    let workspace = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    let bin = env!("CARGO_BIN_EXE_utharness");
+
+    let unscoped = run_clean_with_env(
+        bin,
+        workspace.path(),
+        home.path(),
+        &["providers", "list", "--no-banner"],
+        None,
+        &[("UTHARNESS_API_KEY", "test-key")],
+    );
+    assert!(
+        unscoped.contains("groq        NEEDS KEY"),
+        "a generic key without UTHARNESS_PROVIDER must not mark every provider ready: {unscoped}"
+    );
+
+    let scoped = run_clean_with_env(
+        bin,
+        workspace.path(),
+        home.path(),
+        &["providers", "list", "--no-banner"],
+        None,
+        &[
+            ("UTHARNESS_PROVIDER", "groq"),
+            ("UTHARNESS_API_KEY", "test-key"),
+            ("UTHARNESS_MODEL", ""),
+        ],
+    );
+    assert!(scoped.contains("groq        CONFIGURED  groq/compound-mini"));
+    assert!(scoped.contains("cerebras    NEEDS KEY   qwen-3.8-27b"));
+}
+
+#[test]
+fn where_reports_selection_sources() {
+    let workspace = tempdir().unwrap();
+    let home = tempdir().unwrap();
+    let bin = env!("CARGO_BIN_EXE_utharness");
+    let output = run_clean_with_env(
+        bin,
+        workspace.path(),
+        home.path(),
+        &["chat", "--no-banner"],
+        Some("/where\n/quit\n"),
+        &[
+            ("UTHARNESS_PROVIDER", "groq"),
+            ("UTHARNESS_MODEL", "groq/compound-mini"),
+        ],
+    );
+    assert!(
+        output.contains("source: provider environment; model environment"),
+        "/where must identify precedence sources: {output}"
+    );
+}
+
 #[test]
 fn cli_version_matches_cargo_package_version() {
     let output = Command::new(env!("CARGO_BIN_EXE_utharness"))

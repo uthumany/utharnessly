@@ -77,7 +77,7 @@ Pin a release explicitly:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/uthumany/utharnessly/main/packaging/install.sh | \
-  UTHARNESS_VERSION=0.2.34 bash
+  UTHARNESS_VERSION=0.2.35 bash
 ```
 
 ## Windows PowerShell

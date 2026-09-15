@@ -759,7 +759,7 @@ fn chat_repl(app: &App, session: &utharness_core::Session) -> Result<()> {
                 println!("  /save    persist the current selection (workspace or global)");
                 println!("  /quit    leave the chat");
             }
-            "/where" => print_current_selection("Active"),
+            "/where" => print_selection_with_sources(),
             "/model" | "/provider" | "/m" => {
                 if let Err(error) = model_selector_flow(&mut input) {
                     println!("Model selector failed: {error:#}");
@@ -819,6 +819,50 @@ fn print_current_selection(verb: &str) {
         println!("{verb} provider {provider} (model: provider default)");
     } else {
         println!("{verb} {provider}/{model}");
+    }
+}
+
+/// Explain precedence at the point where users diagnose a surprising model.
+/// Keep provider and model sources distinct: an explicit provider can still
+/// legitimately use a model from a saved file, or its own default.
+fn print_selection_with_sources() {
+    let (provider, model) = current_selection();
+    let provider_env = env::var("UTHARNESS_PROVIDER")
+        .ok()
+        .is_some_and(|value| !value.trim().is_empty());
+    let model_env = env::var("UTHARNESS_MODEL")
+        .ok()
+        .is_some_and(|value| !value.trim().is_empty());
+    let workspace = load_runtime_config().ok().flatten();
+    let global = setup_system::load_global_selection();
+
+    let provider_source = if provider_env {
+        "provider environment"
+    } else if workspace.is_some() {
+        "workspace config"
+    } else if global.is_some() {
+        "global config"
+    } else {
+        "provider autodetection"
+    };
+    let model_source = if model_env {
+        "model environment"
+    } else if provider_env {
+        "provider default"
+    } else if workspace.is_some() {
+        "workspace config"
+    } else if global.is_some() {
+        "global config"
+    } else {
+        "provider default"
+    };
+
+    if model.is_empty() {
+        println!(
+            "Active provider {provider} (model: provider default) — source: {provider_source}; {model_source}"
+        );
+    } else {
+        println!("Active {provider}/{model} — source: {provider_source}; {model_source}");
     }
 }
 

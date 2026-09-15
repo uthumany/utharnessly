@@ -631,24 +631,36 @@ impl Gateway {
             kind,
             api_key,
             base_url: base_url.trim_end_matches('/').into(),
-            model: std::env::var("UTHARNESS_MODEL").unwrap_or_else(|_| default_model.into()),
+            // An exported-but-empty variable is a common shell/config state.
+            // It must mean "use the provider default", not an invalid blank ID.
+            model: std::env::var("UTHARNESS_MODEL")
+                .ok()
+                .filter(|model| !model.trim().is_empty())
+                .unwrap_or_else(|| default_model.into()),
             max_retries: 2,
         })
     }
     pub fn status_from_environment(kind: ProviderKind) -> ProviderStatus {
         let (default_url, default_model, key_variable) = kind.defaults();
-        let source = if std::env::var("UTHARNESS_API_KEY").is_ok_and(|v| !v.trim().is_empty()) {
+        let selected = std::env::var("UTHARNESS_PROVIDER")
+            .ok()
+            .and_then(|value| ProviderKind::parse(&value).ok());
+        let uses_generic_key =
+            selected.as_ref() == Some(&kind) && environment_has_value("UTHARNESS_API_KEY");
+        let source = if uses_generic_key {
             Some("UTHARNESS_API_KEY".into())
         } else {
             key_variable
-                .filter(|name| std::env::var(name).is_ok_and(|v| !v.trim().is_empty()))
+                .filter(|name| environment_has_value(name))
                 .map(str::to_string)
         };
         ProviderStatus {
             provider: kind.id().into(),
-            model: std::env::var("UTHARNESS_MODEL").unwrap_or_else(|_| default_model.into()),
+            // A status row describes this provider's real default, not a
+            // session override that may be invalid for every other provider.
+            model: default_model.into(),
             base_url: match std::env::var("UTHARNESS_PROVIDER_URL") {
-                Ok(url) if !url.trim().is_empty() => url,
+                Ok(url) if selected.as_ref() == Some(&kind) && !url.trim().is_empty() => url,
                 _ if kind == ProviderKind::Cloudflare => {
                     cloudflare_default_base_url().unwrap_or_else(|_| default_url.into())
                 }
